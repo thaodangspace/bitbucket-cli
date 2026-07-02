@@ -78,7 +78,9 @@ bitbucket-cli config path          # print the resolved file path
 
 The token must be an Atlassian API token with access to the target workspace.
 Recommended scopes: `read:repository:bitbucket`, `read:pullrequest:bitbucket`,
-and `write:pullrequest:bitbucket` to create/update PRs and post comments.
+and `write:pullrequest:bitbucket` to create/update PRs and post comments. Add
+`write:repository:bitbucket` when using `pr attach`, which uploads files to
+repository Downloads before commenting links on the PR.
 
 If `BITBUCKET_DEFAULT_WORKSPACE`/`BITBUCKET_DEFAULT_REPO` are unset and you run
 inside a git repository whose `origin` points at `bitbucket.org`, the workspace
@@ -99,6 +101,7 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 | `pr comments <id> [--limit N]` | Pull request comments |
 | `pr commits <id> [--limit N]` | Pull request commits |
 | `pr comment <id> --body <markdown>` | Post a markdown comment (write) |
+| `pr attach <id> --file <path> [--message <markdown>]` | Upload files to Downloads and link them from a PR comment (write) |
 | `pr create --source <branch> --title <t> [...]` | Create a pull request (write) |
 | `pr update <id> [--title <t>] [--description ...]` | Update a PR's title/description (write) |
 | `branch list [--query <q>] [--limit N]` | List branches |
@@ -127,6 +130,12 @@ bitbucket-cli pr create --source feature/login --title "Add login" \
 # long descriptions: pipe markdown via stdin
 generate-summary | bitbucket-cli pr create --source feature/login \
   --title "Add login" --description-file -
+
+# Attach files to a PR (write — uploads to repository Downloads, then comments links)
+bitbucket-cli pr attach 123 --file test-report.html --message "Attached test report"
+bitbucket-cli pr attach 123 --file screenshot.png --file debug.log
+# Bitbucket Cloud has no native PR attachment API; existing Downloads artifacts
+# with the same filename are replaced by Bitbucket.
 
 # Update a PR's description (write); reviewers are preserved
 bitbucket-cli pr update 123 --description-file release-notes.md

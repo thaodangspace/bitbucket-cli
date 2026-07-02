@@ -1,11 +1,16 @@
 package bitbucket
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,6 +92,110 @@ func TestRequestPostsJSONBody(t *testing.T) {
 	}
 	if sent["content"].(map[string]any)["raw"] != "hi" {
 		t.Fatalf("unexpected body: %s", body)
+	}
+}
+
+func TestUploadFilesSendsMultipartBody(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.txt")
+	second := filepath.Join(dir, "second.log")
+	if err := os.WriteFile(first, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write first file: %v", err)
+	}
+	if err := os.WriteFile(second, []byte("world"), 0o600); err != nil {
+		t.Fatalf("write second file: %v", err)
+	}
+
+	var captured *http.Request
+	var body []byte
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		captured = r
+		body, _ = io.ReadAll(r.Body)
+		return jsonResponse(201, `{}`), nil
+	})
+
+	err := c.UploadFiles(context.Background(), "/repositories/team/repo/downloads", "files", []UploadFile{
+		{Path: first},
+		{Path: second, Name: "renamed.log"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if captured.Method != http.MethodPost {
+		t.Fatalf("unexpected method: %s", captured.Method)
+	}
+	if captured.URL.String() != "https://api.bitbucket.org/2.0/repositories/team/repo/downloads" {
+		t.Fatalf("unexpected url: %s", captured.URL)
+	}
+	if got := captured.Header.Get("Authorization"); got != "Basic ZGV2QGV4YW1wbGUuY29tOnRva2Vu" {
+		t.Fatalf("unexpected auth header: %s", got)
+	}
+	if got := captured.Header.Get("Accept"); got != "application/json" {
+		t.Fatalf("unexpected accept header: %s", got)
+	}
+	contentType := captured.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "multipart/form-data; boundary=") {
+		t.Fatalf("unexpected content-type: %s", contentType)
+	}
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("parse content-type: %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(1024)
+	if err != nil {
+		t.Fatalf("parse multipart body: %v", err)
+	}
+	parts := form.File["files"]
+	if len(parts) != 2 {
+		t.Fatalf("expected 2 file parts, got %d", len(parts))
+	}
+	if parts[0].Filename != "first.txt" || parts[1].Filename != "renamed.log" {
+		t.Fatalf("unexpected filenames: %q %q", parts[0].Filename, parts[1].Filename)
+	}
+	assertPartContent := func(i int, want string) {
+		t.Helper()
+		f, err := parts[i].Open()
+		if err != nil {
+			t.Fatalf("open multipart part: %v", err)
+		}
+		defer f.Close()
+		got, _ := io.ReadAll(f)
+		if string(got) != want {
+			t.Fatalf("part %d content = %q, want %q", i, got, want)
+		}
+	}
+	assertPartContent(0, "hello")
+	assertPartContent(1, "world")
+}
+
+func TestUploadFilesMapsHTTPErrors(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "artifact.txt")
+	if err := os.WriteFile(file, []byte("artifact"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(406, `unsupported content type`), nil
+	})
+
+	err := c.UploadFiles(context.Background(), "/repositories/team/repo/downloads", "files", []UploadFile{{Path: file}}, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var he *HTTPError
+	if !errors.As(err, &he) {
+		t.Fatalf("expected *HTTPError, got %T", err)
+	}
+	if he.Method != http.MethodPost {
+		t.Fatalf("method = %s, want POST", he.Method)
+	}
+	if he.URL != "https://api.bitbucket.org/2.0/repositories/team/repo/downloads" {
+		t.Fatalf("unexpected url: %s", he.URL)
+	}
+	if he.Status != 406 {
+		t.Fatalf("status = %d, want 406", he.Status)
+	}
+	if he.Excerpt != "unsupported content type" {
+		t.Fatalf("excerpt = %q", he.Excerpt)
 	}
 }
 

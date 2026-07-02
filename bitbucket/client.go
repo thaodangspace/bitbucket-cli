@@ -10,8 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/dtonair/bitbucket-cli/config"
@@ -88,6 +91,14 @@ type RequestOptions struct {
 	Body   any
 }
 
+// UploadFile describes one local file to include in a multipart upload.
+// Name is the remote filename sent in the multipart part. If Name is empty,
+// the local path's base name is used.
+type UploadFile struct {
+	Path string
+	Name string
+}
+
 func (c *Client) authHeader() string {
 	raw := c.cfg.Email + ":" + c.cfg.APIToken
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte(raw))
@@ -142,9 +153,64 @@ func (c *Client) Request(ctx context.Context, pathOrURL string, opts RequestOpti
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	return c.do(req, out)
+}
+
+// UploadFiles performs a multipart/form-data POST containing local files. Each
+// file is sent using fieldName, matching Bitbucket's Downloads API convention
+// of one or more "files" fields.
+func (c *Client) UploadFiles(ctx context.Context, pathOrURL, fieldName string, files []UploadFile, out any) error {
+	if fieldName == "" {
+		return fmt.Errorf("multipart field name is required")
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("at least one upload file is required")
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, file := range files {
+		name := file.Name
+		if name == "" {
+			name = filepath.Base(file.Path)
+		}
+		part, err := writer.CreateFormFile(fieldName, name)
+		if err != nil {
+			return fmt.Errorf("create multipart file field for %q: %w", name, err)
+		}
+		f, err := os.Open(file.Path)
+		if err != nil {
+			return fmt.Errorf("open upload file %q: %w", file.Path, err)
+		}
+		_, copyErr := io.Copy(part, f)
+		closeErr := f.Close()
+		if copyErr != nil {
+			return fmt.Errorf("read upload file %q: %w", file.Path, copyErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close upload file %q: %w", file.Path, closeErr)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("finish multipart body: %w", err)
+	}
+
+	fullURL := buildURL(pathOrURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, &body)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", c.authHeader())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	return c.do(req, out)
+}
+
+func (c *Client) do(req *http.Request, out any) error {
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("request to %s failed: %w", fullURL, err)
+		return fmt.Errorf("request to %s failed: %w", req.URL.String(), err)
 	}
 	defer resp.Body.Close()
 
@@ -155,8 +221,8 @@ func (c *Client) Request(ctx context.Context, pathOrURL string, opts RequestOpti
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &HTTPError{
-			Method:     method,
-			URL:        fullURL,
+			Method:     req.Method,
+			URL:        req.URL.String(),
 			Status:     resp.StatusCode,
 			StatusText: http.StatusText(resp.StatusCode),
 			Excerpt:    excerpt(payload),

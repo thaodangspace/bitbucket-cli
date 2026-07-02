@@ -50,6 +50,7 @@ func run(t *testing.T, transport roundTripFunc, args ...string) (string, error) 
 	// Reset global flag state between runs.
 	flagWorkspace, flagRepo, flagPretty = "", "", false
 	resetFlags(rootCmd)
+	attachFiles, attachMessage = nil, ""
 	testTransport = transport
 	t.Cleanup(func() { testTransport = nil })
 
