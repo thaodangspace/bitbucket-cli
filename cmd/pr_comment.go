@@ -15,6 +15,7 @@ import (
 
 func init() {
 	var body string
+	var replyTo string
 	commentCmd := &cobra.Command{
 		Use:   "comment <id>",
 		Short: "Post a markdown comment on a pull request",
@@ -29,6 +30,14 @@ func init() {
 				return fail(fmt.Errorf("Provide a non-empty body."))
 			}
 
+			var parentID int
+			if cmd.Flags().Changed("reply-to") {
+				parentID, err = parsePositiveID("reply-to comment id", replyTo)
+				if err != nil {
+					return fail(err)
+				}
+			}
+
 			cfg, client, err := newClient()
 			if err != nil {
 				return fail(err)
@@ -40,6 +49,9 @@ func init() {
 
 			payload := map[string]any{
 				"content": map[string]any{"raw": body},
+			}
+			if parentID > 0 {
+				payload["parent"] = map[string]any{"id": parentID}
 			}
 			var raw json.RawMessage
 			path := fmt.Sprintf("%s/pullrequests/%d/comments", base, id)
@@ -68,6 +80,7 @@ func init() {
 		},
 	}
 	commentCmd.Flags().StringVar(&body, "body", "", "Markdown comment body to post (required)")
+	commentCmd.Flags().StringVar(&replyTo, "reply-to", "", "Parent comment ID to reply to")
 	_ = commentCmd.MarkFlagRequired("body")
 
 	prCmd.AddCommand(commentCmd)

@@ -78,9 +78,13 @@ func ctx(cmd *cobra.Command) context.Context {
 
 // parseID parses a positional pull request id argument.
 func parseID(arg string) (int, error) {
+	return parsePositiveID("pull request id", arg)
+}
+
+func parsePositiveID(label, arg string) (int, error) {
 	id, err := strconv.Atoi(strings.TrimSpace(arg))
 	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("invalid pull request id %q: must be a positive integer", arg)
+		return 0, fmt.Errorf("invalid %s %q: must be a positive integer", label, arg)
 	}
 	return id, nil
 }

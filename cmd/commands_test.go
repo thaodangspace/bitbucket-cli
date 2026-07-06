@@ -199,8 +199,60 @@ func TestPRCommentPostsBody(t *testing.T) {
 	if _, has := content["markup"]; has {
 		t.Fatalf("comment body must not send content.markup: %s", gotBody)
 	}
+	if _, has := sent["parent"]; has {
+		t.Fatalf("top-level comment must not send parent: %s", gotBody)
+	}
 	if strings.TrimSpace(out) != "Posted comment #99 on pull request #123." {
 		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestPRCommentReplyPostsParent(t *testing.T) {
+	var gotURL, gotMethod string
+	var gotBody []byte
+	out, err := run(t, func(r *http.Request) (*http.Response, error) {
+		gotURL = r.URL.String()
+		gotMethod = r.Method
+		gotBody, _ = io.ReadAll(r.Body)
+		return jsonResp(201, `{"id":100}`), nil
+	}, "pr", "comment", "123", "--body", "Fixed now", "--reply-to", "456", "--pretty")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Fatalf("expected POST, got %s", gotMethod)
+	}
+	if !strings.Contains(gotURL, "/pullrequests/123/comments") {
+		t.Fatalf("unexpected url: %s", gotURL)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(gotBody, &sent); err != nil {
+		t.Fatalf("body not json: %v", err)
+	}
+	content := sent["content"].(map[string]any)
+	if content["raw"] != "Fixed now" {
+		t.Fatalf("unexpected body: %s", gotBody)
+	}
+	parent := sent["parent"].(map[string]any)
+	if parent["id"] != float64(456) {
+		t.Fatalf("unexpected parent: %s", gotBody)
+	}
+	if strings.TrimSpace(out) != "Posted comment #100 on pull request #123." {
+		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestPRCommentInvalidReplyToFails(t *testing.T) {
+	called := false
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		called = true
+		return jsonResp(201, `{}`), nil
+	}, "pr", "comment", "123", "--body", "Fixed now", "--reply-to", "0")
+	if err == nil {
+		t.Fatal("expected error for invalid reply-to")
+	}
+	if called {
+		t.Fatal("should not call API for invalid reply-to")
 	}
 }
 

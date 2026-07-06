@@ -71,8 +71,9 @@ These mutate Bitbucket. **Do not run them speculatively** — only when the user
 clearly asked you to post/create/update. State what you are about to do first.
 
 ```bash
-# Post a markdown comment
+# Post a markdown comment or reply to an existing comment/thread
 bitbucket-cli pr comment <id> --body "Thanks, taking a look."
+bitbucket-cli pr comment <id> --body "Fixed now." --reply-to <comment-id>
 
 # Create a PR (destination defaults to the repo main branch)
 bitbucket-cli pr create --source feature/login --title "Add login" \

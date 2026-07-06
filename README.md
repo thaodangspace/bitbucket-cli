@@ -100,7 +100,7 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 | `pr get <id>` | One pull request |
 | `pr comments <id> [--limit N]` | Pull request comments |
 | `pr commits <id> [--limit N]` | Pull request commits |
-| `pr comment <id> --body <markdown>` | Post a markdown comment (write) |
+| `pr comment <id> --body <markdown> [--reply-to <comment-id>]` | Post a markdown comment or reply (write) |
 | `pr attach <id> --file <path> [--message <markdown>]` | Upload files to Downloads and link them from a PR comment (write) |
 | `pr create --source <branch> --title <t> [...]` | Create a pull request (write) |
 | `pr update <id> [--title <t>] [--description ...]` | Update a PR's title/description (write) |
@@ -120,8 +120,9 @@ bitbucket-cli branch list --query 'name ~ "feature/"'
 bitbucket-cli pr list --pretty
 # -> #123 Fix login bug [OPEN]
 
-# Post a comment (only run when explicitly asked to post)
+# Post a comment or reply (only run when explicitly asked to post)
 bitbucket-cli pr comment 123 --body "Thanks, I will take a look."
+bitbucket-cli pr comment 123 --body "Fixed now." --reply-to 456
 
 # Create a pull request (write — only run when explicitly asked)
 bitbucket-cli pr create --source feature/login --title "Add login" \
