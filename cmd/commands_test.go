@@ -120,6 +120,56 @@ func TestPRListPathAndQuery(t *testing.T) {
 	}
 }
 
+func TestPRListAuthorFilter(t *testing.T) {
+	var gotURL string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		gotURL = r.URL.String()
+		return jsonResp(200, `{"values":[{"id":1,"title":"A","state":"OPEN"}]}`), nil
+	}, "pr", "list", "--author", "6352db651cc605b1fd15525a")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotURL, `q=author.account_id%3D%226352db651cc605b1fd15525a%22`) {
+		t.Fatalf("query missing author filter: %s", gotURL)
+	}
+}
+
+func TestPRListMineResolvesUser(t *testing.T) {
+	var paths []string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		paths = append(paths, r.URL.String())
+		if strings.HasSuffix(r.URL.Path, "/user") {
+			return jsonResp(200, `{"account_id":"me-123"}`), nil
+		}
+		return jsonResp(200, `{"values":[{"id":1,"title":"A","state":"OPEN"}]}`), nil
+	}, "pr", "list", "--mine")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var sawUser, sawFilter bool
+	for _, p := range paths {
+		if strings.HasSuffix(p, "/user") {
+			sawUser = true
+		}
+		if strings.Contains(p, `q=author.account_id%3D%22me-123%22`) {
+			sawFilter = true
+		}
+	}
+	if !sawUser {
+		t.Fatalf("expected a /user call, got: %v", paths)
+	}
+	if !sawFilter {
+		t.Fatalf("expected author filter with resolved account id, got: %v", paths)
+	}
+}
+
+func TestPRListAuthorAndMineConflict(t *testing.T) {
+	_, err := run(t, nil, "pr", "list", "--author", "x", "--mine")
+	if err == nil {
+		t.Fatal("expected error when both --author and --mine are set")
+	}
+}
+
 func TestPRListPretty(t *testing.T) {
 	out, err := run(t, func(r *http.Request) (*http.Response, error) {
 		return jsonResp(200, `{"values":[{"id":12,"title":"Fix","state":"OPEN"}]}`), nil

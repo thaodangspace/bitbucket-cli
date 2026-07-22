@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -20,14 +21,19 @@ var prCmd = &cobra.Command{
 
 func init() {
 	var (
-		listState string
-		listLimit int
+		listState  string
+		listLimit  int
+		listAuthor string
+		listMine   bool
 	)
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List pull requests for a repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if listMine && listAuthor != "" {
+				return fail(fmt.Errorf("--author and --mine are mutually exclusive"))
+			}
 			cfg, client, err := newClient()
 			if err != nil {
 				return fail(err)
@@ -37,9 +43,20 @@ func init() {
 				return fail(err)
 			}
 
+			author := listAuthor
+			if listMine {
+				author, err = currentAccountID(ctx(cmd), client)
+				if err != nil {
+					return fail(err)
+				}
+			}
+
 			q := url.Values{"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
 			if listState != "" {
 				q.Set("state", listState)
+			}
+			if author != "" {
+				q.Set("q", fmt.Sprintf("author.account_id=%q", author))
 			}
 			path := fmt.Sprintf("%s/pullrequests?%s", base, q.Encode())
 
@@ -55,6 +72,8 @@ func init() {
 	}
 	listCmd.Flags().StringVar(&listState, "state", "", "Filter by state: OPEN, MERGED, DECLINED, or SUPERSEDED")
 	listCmd.Flags().IntVar(&listLimit, "limit", bitbucket.DefaultLimit, "Maximum pull requests to return")
+	listCmd.Flags().StringVar(&listAuthor, "author", "", "Filter by author account ID (e.g. from the Bitbucket profile URL)")
+	listCmd.Flags().BoolVar(&listMine, "mine", false, "Filter to pull requests authored by the authenticated user")
 
 	getCmd := &cobra.Command{
 		Use:   "get <id>",
@@ -152,4 +171,18 @@ func init() {
 
 	prCmd.AddCommand(listCmd, getCmd, commentsCmd, commitsCmd)
 	rootCmd.AddCommand(prCmd)
+}
+
+// currentAccountID resolves the authenticated user's account ID via GET /user.
+func currentAccountID(c context.Context, client *bitbucket.Client) (string, error) {
+	var user struct {
+		AccountID string `json:"account_id"`
+	}
+	if err := client.Request(c, "/user", bitbucket.RequestOptions{}, &user); err != nil {
+		return "", err
+	}
+	if user.AccountID == "" {
+		return "", fmt.Errorf("could not resolve authenticated user's account ID from /user")
+	}
+	return user.AccountID, nil
 }
