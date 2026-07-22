@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dtonair/bitbucket-cli/config"
+	"github.com/thaodangspace/bitbucket-cli/config"
 )
 
 // roundTripFunc lets a test stand in for an http.RoundTripper.

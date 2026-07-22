@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dtonair/bitbucket-cli/bitbucket"
+	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 )
 
 func decode(t *testing.T, s string) map[string]any {

@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dtonair/bitbucket-cli/bitbucket"
-	"github.com/dtonair/bitbucket-cli/output"
+	"github.com/thaodangspace/bitbucket-cli/bitbucket"
+	"github.com/thaodangspace/bitbucket-cli/output"
 
 	"github.com/spf13/cobra"
 )

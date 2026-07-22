@@ -19,7 +19,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X github.com/dtonair/bitbucket-cli/cmd.version=v{{ .Version }}
+      - -s -w -X github.com/thaodangspace/bitbucket-cli/cmd.version=v{{ .Version }}
 
 archives:
   - id: default

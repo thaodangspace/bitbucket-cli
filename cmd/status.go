@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dtonair/bitbucket-cli/output"
+	"github.com/thaodangspace/bitbucket-cli/output"
 
 	"github.com/spf13/cobra"
 )

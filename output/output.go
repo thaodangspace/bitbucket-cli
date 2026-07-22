@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dtonair/bitbucket-cli/bitbucket"
+	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 )
 
 // RenderJSON writes v as indented JSON followed by a newline.

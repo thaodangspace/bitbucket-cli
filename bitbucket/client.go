@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dtonair/bitbucket-cli/config"
+	"github.com/thaodangspace/bitbucket-cli/config"
 )
 
 // APIBaseURL is the Bitbucket Cloud REST 2.0 base.

@@ -8,7 +8,7 @@ import (
 )
 
 // version is the bitbucket-cli release version. Release builds set it via
-// -ldflags "-X github.com/dtonair/bitbucket-cli/cmd.version=...". For
+// -ldflags "-X github.com/thaodangspace/bitbucket-cli/cmd.version=...". For
 // `go install`-ed builds it falls back to the module version from build info.
 var version = "dev"
 

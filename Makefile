@@ -1,7 +1,7 @@
 .PHONY: build install test test-verbose clean fmt vet lint
 
 BINARY := bitbucket-cli
-MODULE := github.com/dtonair/bitbucket-cli
+MODULE := github.com/thaodangspace/bitbucket-cli
 
 # Build the binary locally.
 build:

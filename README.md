@@ -13,7 +13,7 @@ non-zero exit code.
 ### go install
 
 ```bash
-go install github.com/dtonair/bitbucket-cli@latest
+go install github.com/thaodangspace/bitbucket-cli@latest
 ```
 
 Installs the latest tagged release into `$GOBIN`. Requires Go 1.24+. Pin a
@@ -22,7 +22,7 @@ specific version with `@v0.1.0`.
 ### Prebuilt binary
 
 Download a tarball for your OS/arch from the
-[Releases page](https://github.com/dtonair/bitbucket-cli/releases), extract it,
+[Releases page](https://github.com/thaodangspace/bitbucket-cli/releases), extract it,
 and put `bitbucket-cli` on your `PATH`. No Go toolchain required.
 
 ### Build from source
