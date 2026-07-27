@@ -2,10 +2,13 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+import cloudflare from '@astrojs/cloudflare';
+
 const site = process.env.SITE_URL || undefined;
 
 export default defineConfig({
   site,
+
   integrations: [
     starlight({
       title: 'bitbucket-cli',
@@ -41,4 +44,6 @@ export default defineConfig({
       customCss: ['./src/styles/custom.css'],
     }),
   ],
+
+  adapter: cloudflare(),
 });
