@@ -1,0 +1,37 @@
+---
+title: bitbucket-cli
+description: Drive Bitbucket Cloud from the command line with a JSON-first CLI.
+template: splash
+hero:
+  tagline: Pull requests, branches, repositories, and pipelines from the shell.
+  actions:
+    - text: Get started
+      link: /getting-started/
+      icon: right-arrow
+    - text: Browse commands
+      link: /commands/
+      icon: open-book
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+`bitbucket-cli` is a standalone Go CLI for Bitbucket Cloud. It works without the
+Pi runtime and keeps automation predictable: JSON is the default, `--pretty`
+provides one-line summaries, and errors are structured on stderr.
+
+<CardGrid stagger>
+  <Card title="Resolve repositories" icon="setting">
+    Configure workspace/repository defaults or let the CLI detect a Bitbucket origin from the local git remote.
+  </Card>
+  <Card title="Inspect work" icon="magnifier">
+    List and inspect pull requests, comments, commits, branches, repositories, and pipelines.
+  </Card>
+  <Card title="Write deliberately" icon="rocket">
+    Create or update pull requests, post comments, and attach files only for explicitly requested operations.
+  </Card>
+</CardGrid>
+
+:::caution[Bitbucket credentials required]
+API operations require an Atlassian API token and email address with access to
+the target workspace. Keep credentials out of source control.
+:::

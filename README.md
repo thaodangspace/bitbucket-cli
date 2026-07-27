@@ -160,6 +160,12 @@ Credentials are read from environment variables or the config file and are
 never logged or echoed. Do not commit tokens, `.env` files, or a config file
 containing a real API token (`chmod 600` it and keep it out of version control).
 
+## Documentation
+
+The documentation site is an Astro/Starlight app under `docs/`. Run it locally
+with `make docs-dev`, or build the static site with `make docs-build`. Cloudflare
+Pages settings are documented in [`docs/README.md`](docs/README.md).
+
 ## Testing
 
 ```bash

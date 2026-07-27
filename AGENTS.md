@@ -13,6 +13,7 @@ without the Pi runtime.
 | `bitbucket/client.go` | Thin REST 2.0 client: Basic auth, JSON `Request`, multipart `UploadFiles`, `Paginate`, normalized `HTTPError`. |
 | `config/config.go` | Config resolution: env → YAML file → git-remote auto-detect. |
 | `output/` | `RenderJSON`/`RenderLines`/`WriteError` and `*Summary` text formatters. |
+| `docs/` | Astro/Starlight static documentation site. |
 
 ## Conventions
 
@@ -62,3 +63,7 @@ fields added. Preserve this behavior for any future PR mutation.
 
 `go build -o bitbucket-cli .` or `go install .`. Deps: `spf13/cobra`,
 `gopkg.in/yaml.v3` only. Release via goreleaser (`.goreleaser.yaml`).
+
+The docs site uses npm from `docs/` and emits static output to `docs/dist/`:
+`make docs-build`. Cloudflare Pages uses root `docs`, build command
+`npm run build`, and output `dist`.

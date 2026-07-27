@@ -1,4 +1,4 @@
-.PHONY: build install test test-verbose clean fmt vet lint
+.PHONY: build install test test-verbose docs-install docs-dev docs-build docs-preview clean fmt vet lint
 
 BINARY := bitbucket-cli
 MODULE := github.com/thaodangspace/bitbucket-cli
@@ -18,6 +18,22 @@ test:
 # Run all tests with verbose output.
 test-verbose:
 	go test ./... -v
+
+# Install documentation site dependencies.
+docs-install:
+	npm --prefix docs ci
+
+# Start the documentation site development server.
+docs-dev:
+	npm --prefix docs run dev
+
+# Build the static documentation site.
+docs-build: docs-install
+	npm --prefix docs run build
+
+# Preview the production documentation build.
+docs-preview:
+	npm --prefix docs run preview
 
 # Remove the built binary.
 clean:
