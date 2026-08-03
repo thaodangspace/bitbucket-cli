@@ -6,7 +6,6 @@ package bitbucket
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,7 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/thaodangspace/bitbucket-cli/config"
+	"github.com/thaodangspace/bitbucket-cli/auth"
 )
 
 // APIBaseURL is the Bitbucket Cloud REST 2.0 base.
@@ -33,6 +32,27 @@ const (
 // excerptLimit bounds how much of an error response body is surfaced.
 const excerptLimit = 500
 
+// RequiredScopes maps an API path to the documented Bitbucket API-token scopes
+// that cover it, for surfacing actionable guidance on 403 responses. Bitbucket
+// does not expose a universal scope-introspection endpoint, so this is a
+// conservative, command-family-level registry rather than an exact claim.
+func RequiredScopes(path string) string {
+	switch {
+	case strings.Contains(path, "/downloads"):
+		return "write:repository:bitbucket"
+	case strings.Contains(path, "/pullrequests/"):
+		return "write:pullrequest:bitbucket"
+	case strings.Contains(path, "/pullrequests"):
+		return "pullrequest:write or pullrequest:read"
+	case strings.Contains(path, "/refs/branches"), strings.Contains(path, "/commits"):
+		return "repository:read"
+	case strings.Contains(path, "/pipeline"):
+		return "pipeline:read"
+	default:
+		return "repository:read"
+	}
+}
+
 // HTTPError is a normalized non-2xx response from Bitbucket.
 type HTTPError struct {
 	Method     string `json:"method"`
@@ -45,9 +65,9 @@ type HTTPError struct {
 func (e *HTTPError) Error() string {
 	switch e.Status {
 	case http.StatusUnauthorized:
-		return "Bitbucket authentication failed. Check BITBUCKET_EMAIL and BITBUCKET_API_TOKEN."
+		return "Bitbucket authentication failed. Run `bitbucket-cli auth login` or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN."
 	case http.StatusForbidden:
-		return "Bitbucket authorization failed. Check API token scopes and repository permissions."
+		return fmt.Sprintf("Bitbucket authorization failed. The endpoint requires the %s scope; check the token's granted scopes.", RequiredScopes(e.URL))
 	case http.StatusNotFound:
 		return "Bitbucket resource not found. Check workspace, repo, and IDs."
 	case http.StatusTooManyRequests:
@@ -62,9 +82,9 @@ func EncodePathSegment(value string) string {
 	return url.PathEscape(value)
 }
 
-// Client talks to the Bitbucket Cloud API using Basic auth.
+// Client talks to the Bitbucket Cloud API using an auth.Provider.
 type Client struct {
-	cfg  config.Config
+	auth auth.Provider
 	http *http.Client
 }
 
@@ -76,11 +96,23 @@ func WithHTTPClient(h *http.Client) Option {
 	return func(c *Client) { c.http = h }
 }
 
-// NewClient builds a Client from config.
-func NewClient(cfg config.Config, opts ...Option) *Client {
-	c := &Client{cfg: cfg, http: http.DefaultClient}
+// WithAuth injects the credential provider to use for requests. Defaults to
+// Basic API-token auth if not provided.
+func WithAuth(a auth.Provider) Option {
+	return func(c *Client) { c.auth = a }
+}
+
+// NewClient builds a Client using the given auth provider.
+func NewClient(a auth.Provider, opts ...Option) *Client {
+	c := &Client{auth: a, http: http.DefaultClient}
 	for _, opt := range opts {
 		opt(c)
+	}
+	if c.auth == nil {
+		// No provider configured: an API token requires an email, so fall
+		// back to an empty Basic credential (the API will reject it). This
+		// keeps NewClient usable when only transport config matters (tests).
+		c.auth = auth.NewBasicAuth(auth.TokenAPI, "", "")
 	}
 	return c
 }
@@ -97,11 +129,6 @@ type RequestOptions struct {
 type UploadFile struct {
 	Path string
 	Name string
-}
-
-func (c *Client) authHeader() string {
-	raw := c.cfg.Email + ":" + c.cfg.APIToken
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(raw))
 }
 
 func buildURL(pathOrURL string) string {
@@ -148,7 +175,9 @@ func (c *Client) Request(ctx context.Context, pathOrURL string, opts RequestOpti
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", c.authHeader())
+	if err := c.applyAuth(req); err != nil {
+		return err
+	}
 	if opts.Body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -201,10 +230,22 @@ func (c *Client) UploadFiles(ctx context.Context, pathOrURL, fieldName string, f
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", c.authHeader())
+	if err := c.applyAuth(req); err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	return c.do(req, out)
+}
+
+func (c *Client) applyAuth(req *http.Request) error {
+	if c.auth == nil {
+		return nil
+	}
+	if err := c.auth.Apply(req); err != nil {
+		return fmt.Errorf("apply auth: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) do(req *http.Request, out any) error {
@@ -220,13 +261,7 @@ func (c *Client) do(req *http.Request, out any) error {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &HTTPError{
-			Method:     req.Method,
-			URL:        req.URL.String(),
-			Status:     resp.StatusCode,
-			StatusText: http.StatusText(resp.StatusCode),
-			Excerpt:    excerpt(payload),
-		}
+		return c.httpError(req, resp.StatusCode, payload)
 	}
 
 	if out == nil || len(payload) == 0 {
@@ -236,6 +271,32 @@ func (c *Client) do(req *http.Request, out any) error {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil
+}
+
+// httpError builds a normalized HTTPError, redacting any configured secret from
+// the URL and the response excerpt so tokens never reach error output.
+func (c *Client) httpError(req *http.Request, status int, payload []byte) *HTTPError {
+	secret := c.secret()
+	urlStr := req.URL.String()
+	exc := excerpt(payload)
+	if secret != "" {
+		urlStr = auth.Redact(urlStr, secret)
+		exc = auth.Redact(exc, secret)
+	}
+	return &HTTPError{
+		Method:     req.Method,
+		URL:        urlStr,
+		Status:     status,
+		StatusText: http.StatusText(status),
+		Excerpt:    exc,
+	}
+}
+
+func (c *Client) secret() string {
+	if s, ok := c.auth.(auth.SecretRevealer); ok {
+		return s.Secret()
+	}
+	return ""
 }
 
 // page is the standard Bitbucket paginated envelope.

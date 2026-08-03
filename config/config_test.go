@@ -27,9 +27,15 @@ default_repo: file-repo
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := Config{Email: "file@example.com", APIToken: "file-token", DefaultWorkspace: "file-workspace", DefaultRepo: "file-repo"}
-	if cfg != want {
-		t.Fatalf("got %+v want %+v", cfg, want)
+	if cfg.Email != "file@example.com" || cfg.APIToken != "file-token" ||
+		cfg.DefaultWorkspace != "file-workspace" || cfg.DefaultRepo != "file-repo" {
+		t.Fatalf("got %+v", cfg)
+	}
+	if cfg.CredentialSource != SourceFile || cfg.TokenType != "api" {
+		t.Fatalf("expected file source + api token type, got %+v", cfg)
+	}
+	if cfg.Auth == nil {
+		t.Fatal("expected an auth provider to be built")
 	}
 }
 
@@ -146,9 +152,12 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := Config{Email: "dev@example.com", APIToken: "token", DefaultWorkspace: "team", DefaultRepo: "repo"}
-	if cfg != want {
-		t.Fatalf("got %+v want %+v", cfg, want)
+	if cfg.Email != "dev@example.com" || cfg.APIToken != "token" ||
+		cfg.DefaultWorkspace != "team" || cfg.DefaultRepo != "repo" {
+		t.Fatalf("got %+v", cfg)
+	}
+	if cfg.CredentialSource != SourceEnv || cfg.TokenType != "api" {
+		t.Fatalf("expected env source + api token type, got %+v", cfg)
 	}
 }
 

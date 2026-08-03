@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thaodangspace/bitbucket-cli/config"
+	"github.com/thaodangspace/bitbucket-cli/auth"
 )
 
 // roundTripFunc lets a test stand in for an http.RoundTripper.
@@ -31,8 +31,8 @@ func jsonResponse(status int, body string) *http.Response {
 }
 
 func testClient(rt roundTripFunc) *Client {
-	cfg := config.Config{Email: "dev@example.com", APIToken: "token"}
-	return NewClient(cfg, WithHTTPClient(&http.Client{Transport: rt}))
+	auth := auth.NewBasicAuth(auth.TokenAPI, "dev@example.com", "token")
+	return NewClient(auth, WithHTTPClient(&http.Client{Transport: rt}))
 }
 
 func TestEncodePathSegment(t *testing.T) {
@@ -278,5 +278,18 @@ func TestExcerptTruncates(t *testing.T) {
 	}
 	if len(he.Excerpt) != excerptLimit+len("...") {
 		t.Fatalf("excerpt not truncated: len=%d", len(he.Excerpt))
+	}
+}
+
+func TestForbiddenIncludesRequiredScope(t *testing.T) {
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(403, `{"error":{"message":"denied"}}`), nil
+	})
+	err := c.Request(context.Background(), "/repositories/team/repo/downloads", RequestOptions{}, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "write:repository:bitbucket") {
+		t.Fatalf("403 message should name the required scope: %v", err)
 	}
 }

@@ -39,7 +39,26 @@ The only third-party dependencies are `spf13/cobra` and `gopkg.in/yaml.v3`.
 ## Configuration
 
 Credentials and defaults are resolved with the following precedence:
-**environment variables → config file → git remote auto-detection**.
+**environment variables → config file (+ OS credential store) → git remote
+auto-detection**.
+
+### Auth command (recommended)
+
+The `gh`-style `auth` workflow validates your credential against Bitbucket and
+stores the token in the OS credential store (macOS Keychain) instead of
+plaintext:
+
+```bash
+bitbucket-cli auth login                 # interactive (TTY)
+echo "$TOKEN" | bitbucket-cli auth login --email you@example.com --with-token   # scripting/CI
+bitbucket-cli auth status                # account, source, token type, repo access
+bitbucket-cli auth logout                # remove the stored profile (--yes when stdin is not a TTY)
+bitbucket-cli auth token                 # opt-in: print the token for scripts
+```
+
+`--token-type api|access|oauth` selects API tokens (default), Bitbucket access
+tokens, or OAuth bearer tokens. Tokens are never echoed by these commands; a
+legacy plaintext `api_token` in YAML is migrated by `auth login` and removed.
 
 ### Environment variables
 
@@ -48,28 +67,30 @@ export BITBUCKET_EMAIL="you@example.com"
 export BITBUCKET_API_TOKEN="your-atlassian-api-token"
 export BITBUCKET_DEFAULT_WORKSPACE="workspace-slug"   # optional
 export BITBUCKET_DEFAULT_REPO="repository-slug"        # optional
+export BITBUCKET_TOKEN_TYPE="api"                       # optional: api|access|oauth
 ```
 
 ### Config file
 
 Any value not set in the environment is read from a YAML config file at
 `~/.config/bitbucket-cli.yaml` (or `$XDG_CONFIG_HOME/bitbucket-cli.yaml`).
-Override the path with `BITBUCKET_CONFIG`.
+Override the path with `BITBUCKET_CONFIG`. It holds non-secret profile data:
 
 ```yaml
 # ~/.config/bitbucket-cli.yaml
 email: you@example.com
-api_token: your-atlassian-api-token
+token_type: api
 default_workspace: workspace-slug   # optional
 default_repo: repository-slug       # optional
 ```
 
 All keys are optional; environment variables take precedence over file values.
-Manage the file with the `config` command instead of editing it by hand:
+The token itself resolves from the OS credential store. Manage the file with the
+`config` command instead of editing it by hand:
 
 ```bash
 bitbucket-cli config set email you@example.com
-bitbucket-cli config set api_token your-atlassian-api-token
+bitbucket-cli config set token_type api
 bitbucket-cli config set default_workspace workspace-slug
 bitbucket-cli config get default_workspace
 bitbucket-cli config list          # API token redacted
@@ -80,7 +101,8 @@ The token must be an Atlassian API token with access to the target workspace.
 Recommended scopes: `read:repository:bitbucket`, `read:pullrequest:bitbucket`,
 and `write:pullrequest:bitbucket` to create/update PRs and post comments. Add
 `write:repository:bitbucket` when using `pr attach`, which uploads files to
-repository Downloads before commenting links on the PR.
+repository Downloads before commenting links on the PR. On a `403` the CLI names
+the required scope for the endpoint.
 
 If `BITBUCKET_DEFAULT_WORKSPACE`/`BITBUCKET_DEFAULT_REPO` are unset and you run
 inside a git repository whose `origin` points at `bitbucket.org`, the workspace
@@ -90,6 +112,10 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 
 | Command | Description |
 | --- | --- |
+| `auth login [--email <e>] [--with-token] [--token-type api\|access\|oauth]` | Validate and store credentials in the OS credential store |
+| `auth status [--json]` | Report account, credential source, token type, repo access |
+| `auth logout [--yes]` | Remove the stored profile |
+| `auth token` | Print the active token (opt-in, for scripting) |
 | `status` | Report config validity and default repo |
 | `config set <key> <value>` | Write a value to the config file |
 | `config get <key>` | Print a stored config value |
@@ -156,9 +182,13 @@ bitbucket-cli --workspace acme --repo web pr list
 
 ## Security
 
-Credentials are read from environment variables or the config file and are
-never logged or echoed. Do not commit tokens, `.env` files, or a config file
-containing a real API token (`chmod 600` it and keep it out of version control).
+Credentials resolve from environment variables, the config file, or the OS
+credential store. Tokens are never placed in command arguments, logs, error
+excerpts, or pretty output; error responses redact the active token. `auth
+logout` and `auth status` never mutate environment variables, and tests run
+against a temporary config and an in-memory credential store. Do not commit
+tokens, `.env` files, or a config file containing a real API token (`chmod 600`
+it and keep it out of version control).
 
 ## Documentation
 
