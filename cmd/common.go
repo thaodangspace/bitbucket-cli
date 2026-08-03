@@ -49,7 +49,7 @@ func newClient() (config.Config, *bitbucket.Client, error) {
 	if testTransport != nil {
 		opts = append(opts, bitbucket.WithHTTPClient(&http.Client{Transport: testTransport}))
 	}
-	return cfg, bitbucket.NewClient(cfg, opts...), nil
+	return cfg, bitbucket.NewClient(cfg.Auth, opts...), nil
 }
 
 // resolveRepo turns the persistent --workspace/--repo flags plus config

@@ -9,9 +9,10 @@ without the Pi runtime.
 | Path | Responsibility |
 | --- | --- |
 | `main.go` | Entry point → `cmd.Execute()` |
-| `cmd/` | Cobra commands. One file per area: `pr.go` (read), `pr_comment.go` + `pr_write.go` + `pr_attach.go` (write), `branch.go`, `repo.go`, `status.go`, `config.go`, `root.go`. `common.go` holds shared helpers. |
-| `bitbucket/client.go` | Thin REST 2.0 client: Basic auth, JSON `Request`, multipart `UploadFiles`, `Paginate`, normalized `HTTPError`. |
-| `config/config.go` | Config resolution: env → YAML file → git-remote auto-detect. |
+| `cmd/` | Cobra commands. One file per area: `pr.go` (read), `pr_comment.go` + `pr_write.go` + `pr_attach.go` (write), `branch.go`, `repo.go`, `status.go`, `config.go`, `auth.go`, `root.go`. `common.go` holds shared helpers. |
+| `bitbucket/client.go` | Thin REST 2.0 client: provider-based auth, JSON `Request`, multipart `UploadFiles`, `Paginate`, normalized `HTTPError`, 403 scope hints, token redaction. |
+| `auth/` | Credential abstraction: `Provider` (Basic/Bearer), `SecretStore` (OS keychain + memory for tests), token types. |
+| `config/config.go` | Config resolution: env → YAML file → git-remote auto-detect, keychain-backed token lookup, legacy plaintext migration. |
 | `output/` | `RenderJSON`/`RenderLines`/`WriteError` and `*Summary` text formatters. |
 | `docs/` | Astro/Starlight static documentation site. |
 
@@ -55,9 +56,10 @@ fields added. Preserve this behavior for any future PR mutation.
   the `rootCmd` singleton across `Execute()` calls — flag values and `Changed`
   markers leak between tests otherwise. Slice flags such as `pr attach --file` may
   also need their backing package variables reset explicitly.
-- **Known gotcha**: `TestStatusMissingCredsFails` reads the developer's real
-  `~/.config/bitbucket-cli.yaml`; it fails locally when that file has an `email`.
-  The test should be sandboxed to a temp `BITBUCKET_CONFIG` (not yet done).
+- Tests are sandboxed from the developer's environment: `run`/`runAt` set a
+  temporary `BITBUCKET_CONFIG` and inject an in-memory `auth.SecretStore`
+  (`auth.SetGlobalStore`), so the real `~/.config/bitbucket-cli.yaml` and macOS
+  Keychain are never touched.
 
 ## Build
 

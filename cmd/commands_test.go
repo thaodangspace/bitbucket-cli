@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/thaodangspace/bitbucket-cli/auth"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -37,18 +38,32 @@ func jsonResp(status int, body string) *http.Response {
 	}
 }
 
-// run executes the root command with args, capturing stdout. The stub
-// transport (may be nil) handles HTTP and can record the last request.
+// run executes the root command with args, capturing stdout, sandboxed to a
+// fresh temp config path. The stub transport (may be nil) handles HTTP and can
+// record the last request.
 func run(t *testing.T, transport roundTripFunc, args ...string) (string, error) {
+	t.Helper()
+	return runAt(t, transport, t.TempDir()+"/bitbucket-cli.yaml", args...)
+}
+
+// runAt is run() but with an explicit BITBUCKET_CONFIG path, so tests can
+// inspect or pre-populate a specific config file.
+func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string) (string, error) {
 	t.Helper()
 
 	t.Setenv("BITBUCKET_EMAIL", "dev@example.com")
 	t.Setenv("BITBUCKET_API_TOKEN", "token")
 	t.Setenv("BITBUCKET_DEFAULT_WORKSPACE", "team")
 	t.Setenv("BITBUCKET_DEFAULT_REPO", "repo")
+	// Never read the developer's real config or keychain in tests.
+	t.Setenv("BITBUCKET_CONFIG", cfgPath)
+	auth.SetGlobalStore(auth.NewMemoryStore())
+	t.Cleanup(func() { auth.SetGlobalStore(nil) })
 
 	// Reset global flag state between runs.
 	flagWorkspace, flagRepo, flagPretty = "", "", false
+	flagLoginEmail, flagLoginWithToken, flagLoginTokenType = "", false, string(auth.TokenAPI)
+	flagStatusJSON, flagLogoutYes = false, false
 	resetFlags(rootCmd)
 	attachFiles, attachMessage = nil, ""
 	testTransport = transport

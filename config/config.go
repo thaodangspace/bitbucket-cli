@@ -5,19 +5,34 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/thaodangspace/bitbucket-cli/auth"
 	"gopkg.in/yaml.v3"
+)
+
+// CredentialSource labels where the active token came from.
+type CredentialSource string
+
+// Supported credential sources.
+const (
+	SourceEnv      CredentialSource = "env"      // BITBUCKET_API_TOKEN
+	SourceFile     CredentialSource = "file"     // legacy plaintext api_token in YAML
+	SourceKeychain CredentialSource = "keychain" // OS credential store
 )
 
 // Config holds resolved Bitbucket credentials and optional repo defaults.
 type Config struct {
 	Email            string
 	APIToken         string
+	TokenType        string // auth token type: "api", "access", or "oauth"
+	CredentialSource CredentialSource
+	Auth             auth.Provider
 	DefaultWorkspace string
 	DefaultRepo      string
 }
@@ -35,16 +50,19 @@ type ResolvedRepoRef struct {
 }
 
 // FileConfig mirrors the YAML config file. All fields are optional and act as
-// fallbacks for the corresponding environment variables.
+// fallbacks for the corresponding environment variables. api_token is the
+// legacy plaintext location and is migrated to the credential store by
+// MigrateLegacyToken.
 type FileConfig struct {
 	Email            string `yaml:"email,omitempty"`
 	APIToken         string `yaml:"api_token,omitempty"`
+	TokenType        string `yaml:"token_type,omitempty"`
 	DefaultWorkspace string `yaml:"default_workspace,omitempty"`
 	DefaultRepo      string `yaml:"default_repo,omitempty"`
 }
 
 // FileKeys are the keys settable in the config file, in display order.
-var FileKeys = []string{"email", "api_token", "default_workspace", "default_repo"}
+var FileKeys = []string{"email", "token_type", "api_token", "default_workspace", "default_repo"}
 
 func (fc *FileConfig) field(key string) (*string, error) {
 	switch key {
@@ -52,6 +70,8 @@ func (fc *FileConfig) field(key string) (*string, error) {
 		return &fc.Email, nil
 	case "api_token":
 		return &fc.APIToken, nil
+	case "token_type":
+		return &fc.TokenType, nil
 	case "default_workspace":
 		return &fc.DefaultWorkspace, nil
 	case "default_repo":
@@ -164,22 +184,70 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// LoadOptions tweak credential resolution (used in tests).
+type LoadOptions struct {
+	SecretStore auth.SecretStore
+}
+
+// LoadOption configures LoadConfig.
+type LoadOption func(*LoadOptions)
+
+// WithSecretStore injects a SecretStore to resolve keychain credentials.
+func WithSecretStore(s auth.SecretStore) LoadOption {
+	return func(o *LoadOptions) { o.SecretStore = s }
+}
+
+// resolveToken determines the active token following env > config file >
+// credential store precedence. The second return is the CredentialSource.
+func resolveToken(env map[string]string, file FileConfig, store auth.SecretStore, email string) (string, CredentialSource, error) {
+	if t := trimmed(env, "BITBUCKET_API_TOKEN"); t != "" {
+		return t, SourceEnv, nil
+	}
+	if t := strings.TrimSpace(file.APIToken); t != "" {
+		return t, SourceFile, nil
+	}
+	if email != "" {
+		if t, err := store.Get(email); err == nil {
+			return strings.TrimSpace(t), SourceKeychain, nil
+		} else if !errors.Is(err, auth.ErrNotFound) {
+			// A broken credential store must not break env/file automation;
+			// treat it as "no keychain token" rather than failing.
+			return "", "", nil
+		}
+	}
+	return "", "", nil
+}
+
 // LoadConfig builds a Config from the given environment map, the YAML config
 // file at configPath (pass "" to skip), and the local git remote. gitCwd is the
 // directory used for git remote auto-detection of the default workspace/repo
 // (pass "" for the current process directory). Precedence is env > file > git.
-// Email and API token are required; everything else is optional.
-func LoadConfig(env map[string]string, gitCwd, configPath string) (Config, error) {
+// Email and the API token are required; everything else is optional.
+func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOption) (Config, error) {
+	o := &LoadOptions{SecretStore: auth.CurrentStore()}
+	for _, opt := range opts {
+		opt(o)
+	}
+
 	file, err := LoadFileConfig(configPath)
 	if err != nil {
 		return Config{}, err
 	}
 
 	email := firstNonEmpty(env["BITBUCKET_EMAIL"], file.Email)
-	apiToken := firstNonEmpty(env["BITBUCKET_API_TOKEN"], file.APIToken)
 
-	if email == "" || apiToken == "" {
+	token, source, err := resolveToken(env, file, o.SecretStore, email)
+	if err != nil {
+		return Config{}, err
+	}
+
+	if email == "" || token == "" {
 		return Config{}, fmt.Errorf("Set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN (via environment or %s) before using bitbucket-cli.", configHint(configPath))
+	}
+
+	tokenType := firstNonEmpty(env["BITBUCKET_TOKEN_TYPE"], file.TokenType)
+	if tokenType == "" {
+		tokenType = string(auth.TokenAPI)
 	}
 
 	workspace := firstNonEmpty(env["BITBUCKET_DEFAULT_WORKSPACE"], file.DefaultWorkspace)
@@ -198,10 +266,40 @@ func LoadConfig(env map[string]string, gitCwd, configPath string) (Config, error
 
 	return Config{
 		Email:            email,
-		APIToken:         apiToken,
+		APIToken:         token,
+		TokenType:        tokenType,
+		CredentialSource: source,
+		Auth:             auth.ProviderFor(auth.TokenType(tokenType), email, token),
 		DefaultWorkspace: workspace,
 		DefaultRepo:      repo,
 	}, nil
+}
+
+// MigrateLegacyToken moves a plaintext api_token from the YAML config file into
+// the secret store and removes it from the file, preserving every other key.
+// It reports whether a migration happened. The migration is one-time: after a
+// successful write the file no longer contains api_token.
+func MigrateLegacyToken(path string, store auth.SecretStore) (bool, error) {
+	fc, err := LoadFileConfig(path)
+	if err != nil {
+		return false, err
+	}
+	token := strings.TrimSpace(fc.APIToken)
+	if token == "" {
+		return false, nil
+	}
+	email := strings.TrimSpace(fc.Email)
+	if email == "" {
+		return false, fmt.Errorf("cannot migrate api_token to the credential store: config file %s has no email", path)
+	}
+	if err := store.Set(email, token); err != nil {
+		return false, fmt.Errorf("save token to credential store: %w", err)
+	}
+	fc.APIToken = ""
+	if err := WriteFileConfig(path, fc); err != nil {
+		return false, fmt.Errorf("remove plaintext token from %s: %w", path, err)
+	}
+	return true, nil
 }
 
 func configHint(path string) string {
