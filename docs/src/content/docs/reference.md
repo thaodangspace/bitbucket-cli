@@ -223,7 +223,7 @@ Create or manage pull request comments
 - Classification: **write**
 - Required scopes: `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comment [<id>]`
-- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
+- JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
 Flags: `--body-file` — Read the comment body from a file (- for stdin); `--body` — Markdown comment body; `--from` — Positive old-side file line number for an inline comment; `--path` — File path for an inline comment; `--pending` — Send Bitbucket's pending=true comment field; this creates no local draft and may be rejected by unsupported workflows; `--reply-to` — Parent comment ID to reply to; `--to` — Positive new-side file line number for an inline comment
 
@@ -234,7 +234,7 @@ Delete a pull request comment
 - Classification: **write**
 - Required scopes: `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comment delete <pr> <comment-id>`
-- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
+- JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
 Flags: `--yes` — Confirm deletion
 
@@ -245,7 +245,7 @@ Edit a pull request comment
 - Classification: **write**
 - Required scopes: `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comment edit <pr> <comment-id>`
-- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
+- JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
 Flags: `--body-file` — Read the replacement body from a file (- for stdin); `--body` — Replacement markdown body
 
@@ -253,10 +253,10 @@ Flags: `--body-file` — Read the replacement body from a file (- for stdin); `-
 
 List comments on a pull request
 
-- Classification: **write**
+- Classification: **read**
 - Required scopes: `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comments <id>`
-- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
+- JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
 Flags: `--limit` — Maximum comments to return
 
@@ -307,7 +307,7 @@ Flags: `--author` — Filter by author account ID (e.g. from the Bitbucket profi
 Remove your change request from a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr remove-change-request [<id>]`
 
 ## `pr review [<id>]`
@@ -315,7 +315,7 @@ Remove your change request from a pull request
 Approve, request changes, or comment on a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr review [<id>]`
 
 Flags: `--approve` — Approve the pull request; `--body-file` — Read the review/comment body from a file (- for stdin); `--body` — Review/comment body; `--comment` — Post a review comment without approving or requesting changes; `--request-changes` — Request changes (requires a non-empty review body)
@@ -355,7 +355,7 @@ List pull request tasks
 - Classification: **read**
 - Required scopes: `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr task list <pr>`
-- JSON fields: `id,content,state,comment,user,created_on,updated_on`
+- JSON fields: `id,content,state,comment,creator,pending,resolved_on,resolved_by,created_on,updated_on`
 
 Flags: `--limit` — Maximum tasks to return; `--state` — Filter by task state: OPEN or RESOLVED
 
@@ -398,7 +398,7 @@ Resolve a pull request comment thread
 Remove your approval from a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr unapprove [<id>]`
 
 ## `pr update <id>`

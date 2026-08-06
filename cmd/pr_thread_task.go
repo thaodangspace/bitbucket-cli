@@ -74,7 +74,7 @@ func init() {
 			}
 			q := url.Values{"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
 			if state != "" {
-				q.Set("state", state)
+				q.Set("q", fmt.Sprintf("state=%q", state))
 			}
 			values, err := prctx.client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests/%d/tasks?%s", prctx.base, selected.ID, q.Encode()), taskLimit, bitbucket.DefaultMaxPages)
 			if err != nil {

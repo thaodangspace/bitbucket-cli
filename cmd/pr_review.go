@@ -29,15 +29,21 @@ func (e *partialReviewError) Details() map[string]any {
 }
 
 func participantAction(cmd *cobra.Command, selectedID int, prctx repoContext, action string) (json.RawMessage, error) {
-	path := fmt.Sprintf("%s/pullrequests/%d/%s", prctx.base, selectedID, action)
-	method := http.MethodPost
-	if strings.HasPrefix(action, "remove-") || action == "unapprove" {
-		method = http.MethodDelete
-		path = strings.TrimSuffix(path, "unapprove") + "approve"
-		if action == "remove-change-request" {
-			path = strings.TrimSuffix(path, "remove-change-request") + "request-changes"
-		}
+	paths := map[string]string{
+		"approve":               "approve",
+		"request-changes":       "request-changes",
+		"unapprove":             "approve",
+		"remove-change-request": "request-changes",
 	}
+	endpoint, ok := paths[action]
+	if !ok {
+		return nil, fmt.Errorf("unknown review action %q", action)
+	}
+	method := http.MethodPost
+	if action == "unapprove" || action == "remove-change-request" {
+		method = http.MethodDelete
+	}
+	path := fmt.Sprintf("%s/pullrequests/%d/%s", prctx.base, selectedID, endpoint)
 	var raw json.RawMessage
 	if err := prctx.client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: method}, &raw); err != nil {
 		return nil, err

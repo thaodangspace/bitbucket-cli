@@ -39,6 +39,29 @@ func TestPRReviewPostsBodyThenApproves(t *testing.T) {
 	}
 }
 
+func TestParticipantRemovalPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name, args, suffix string
+	}{
+		{"unapprove", "unapprove", "/pullrequests/12/approve"},
+		{"remove changes", "remove-change-request", "/pullrequests/12/request-changes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var method, path string
+			_, err := run(t, func(r *http.Request) (*http.Response, error) {
+				method, path = r.Method, r.URL.Path
+				return jsonResp(http.StatusNoContent, ""), nil
+			}, "pr", tc.args, "12")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if method != http.MethodDelete || !strings.HasSuffix(path, tc.suffix) {
+				t.Fatalf("unexpected removal request: %s %s", method, path)
+			}
+		})
+	}
+}
+
 func TestPRReviewReportsPartialSuccess(t *testing.T) {
 	_, err := run(t, func(r *http.Request) (*http.Response, error) {
 		if strings.HasSuffix(r.URL.Path, "/comments") {
@@ -90,6 +113,20 @@ func TestCommentDeleteRequiresConfirmationAndHandles204(t *testing.T) {
 	}
 	if result["deleted"] != true || result["id"] != float64(4) {
 		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestTaskListStateUsesQueryExpression(t *testing.T) {
+	var gotQuery string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		gotQuery = r.URL.Query().Get("q")
+		return jsonResp(http.StatusOK, `{"values":[]}`), nil
+	}, "pr", "task", "list", "12", "--state", "resolved")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotQuery != `state="RESOLVED"` {
+		t.Fatalf("unexpected task filter: %q", gotQuery)
 	}
 }
 
