@@ -25,6 +25,7 @@ func resetFlags(cmd *cobra.Command) {
 		_ = f.Value.Set(f.DefValue)
 		f.Changed = false
 	})
+	cmd.SetContext(nil)
 	for _, sub := range cmd.Commands() {
 		resetFlags(sub)
 	}
@@ -66,6 +67,11 @@ func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string
 	flagStatusJSON, flagLogoutYes = false, false
 	resetFlags(rootCmd)
 	attachFiles, attachMessage = nil, ""
+	apiMethod = ""
+	apiHeaders, apiRawField, apiField = nil, nil, nil
+	apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""
+	apiPaginate, apiSlurp, apiInclude, apiSilent = false, false, false, false
+	apiCacheStore.m = map[string]apiCacheEntry{}
 	testTransport = transport
 	t.Cleanup(func() { testTransport = nil })
 
