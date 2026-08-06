@@ -10,6 +10,7 @@ import (
 )
 
 func init() {
+	var web bool
 	repoCmd := &cobra.Command{
 		Use:   "repo",
 		Short: "Repository commands",
@@ -24,21 +25,25 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			ref, base, err := resolveRepo(cfg)
 			if err != nil {
 				return fail(err)
+			}
+			if web {
+				return openWeb(buildRepositoryURL(ref.Workspace, ref.RepoSlug))
 			}
 
 			var raw json.RawMessage
 			if err := client.Request(ctx(cmd), base, bitbucket.RequestOptions{}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.RepoSummary); err != nil {
+			if err := emitObjectFields(raw, output.RepoFields, output.RepoSummary); err != nil {
 				return fail(err)
 			}
 			return nil
 		},
 	})
+	repoCmd.Commands()[0].Flags().BoolVar(&web, "web", false, "Open the repository in a browser")
 
 	rootCmd.AddCommand(repoCmd)
 }

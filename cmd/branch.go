@@ -44,7 +44,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.BranchSummary, "No branches found."); err != nil {
+			if err := emitListFields(values, output.BranchFields, output.BranchSummary, "No branches found."); err != nil {
 				return fail(err)
 			}
 			return nil

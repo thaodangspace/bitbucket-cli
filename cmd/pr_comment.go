@@ -22,10 +22,11 @@ func init() {
 		Long:  "Create a markdown comment on a Bitbucket Cloud pull request. This is a write operation; use only when the user has asked to post the comment.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
+			selected, err := parsePullRequestSelector(args[0])
 			if err != nil {
 				return fail(err)
 			}
+			id := selected.ID
 			if strings.TrimSpace(body) == "" {
 				return fail(fmt.Errorf("Provide a non-empty body."))
 			}
@@ -42,7 +43,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			_, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}

@@ -7,7 +7,14 @@ description: Inspect Bitbucket Cloud resources and perform explicit pull request
 
 - `--workspace SLUG` overrides the workspace default.
 - `--repo SLUG` overrides the repository default.
-- `--pretty` prints one-line summaries instead of JSON.
+- `--pretty` prints deterministic table summaries (the table format alias).
+- `--json FIELD,...` selects documented stable fields; `--jq EXPR` and
+  `--template TEMPLATE` transform the selected object.
+- `--format json|table|yaml|raw` chooses the output encoding.
+- `-R, --repository` accepts `workspace/repo` or a Bitbucket URL; the legacy
+  `--workspace` and `--repo` flags remain supported.
+- `--color auto|always|never`, `--pager auto|always|never`, and `--no-pager`
+  control shell integration.
 - List commands default to a limit of 20; pagination is bounded internally.
 
 ## Authentication
@@ -34,7 +41,7 @@ bitbucket-cli config path
 bitbucket-cli config get <key>
 bitbucket-cli config set <key> <value>
 bitbucket-cli config list
-bitbucket-cli repo get
+bitbucket-cli repo get [--web]
 ```
 
 `config list` redacts the API token. `repo get` resolves the target using
@@ -45,7 +52,7 @@ explicit flags, configured defaults, or the local Bitbucket git remote.
 ```sh
 bitbucket-cli pr list [--state OPEN|MERGED|DECLINED|SUPERSEDED] [--limit N]
 bitbucket-cli pr list [--author ACCOUNT_ID|--mine]
-bitbucket-cli pr get <id>
+bitbucket-cli pr get [<id-or-url>] [--web]
 bitbucket-cli pr comments <id> [--limit N]
 bitbucket-cli pr commits <id> [--limit N]
 ```
@@ -81,7 +88,12 @@ explicitly asked for the remote change.
 ```sh
 bitbucket-cli branch list [--query QUERY] [--limit N]
 bitbucket-cli pipeline list [--state STATE] [--limit N]
-bitbucket-cli pipeline get <uuid>
+bitbucket-cli pipeline get <uuid> [--web]
+bitbucket-cli browse [path] [--branch BRANCH] [--no-browser]
+bitbucket-cli completion bash|zsh|fish|powershell
+bitbucket-cli alias set <name> <command>
+bitbucket-cli alias delete <name>
+bitbucket-cli alias list
 ```
 
 Pipeline states include `PENDING`, `IN_PROGRESS`, `COMPLETED`, `PAUSED`,
@@ -113,7 +125,7 @@ Flags:
 - `--silent` — discard the response body.
 - `-o, --output FILE` — write the raw response body to a file (no excerpt
   truncation).
-- `-q, --jq EXPR` — filter JSON output (subset: `.a.b`, `.[<n>]`, `.[]`, `|`).
+- `-q, --jq EXPR` — filter JSON output using jq syntax (gojq).
 - `-t, --template EXPR` — format JSON output with a Go template (`json` and
   `pretty` helpers are provided).
 - `--cache DURATION` — persist GET responses in the user cache for the given

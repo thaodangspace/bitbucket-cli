@@ -55,10 +55,11 @@ func init() {
 			"update the pull request. Existing reviewers are preserved.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
+			selected, err := parsePullRequestSelector(args[0])
 			if err != nil {
 				return fail(err)
 			}
+			id := selected.ID
 			desc, descProvided, err := readBody(updDesc, updDescF, os.Stdin)
 			if err != nil {
 				return fail(err)
@@ -72,7 +73,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			_, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}
@@ -103,7 +104,7 @@ func init() {
 			if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.PullRequestSummary); err != nil {
+			if err := emitObjectFields(raw, output.PullRequestFields, output.PullRequestSummary); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -166,7 +167,7 @@ func init() {
 			if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.PullRequestSummary); err != nil {
+			if err := emitObjectFields(raw, output.PullRequestFields, output.PullRequestSummary); err != nil {
 				return fail(err)
 			}
 			return nil

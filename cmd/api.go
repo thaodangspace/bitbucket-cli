@@ -18,6 +18,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/itchyny/gojq"
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 	"github.com/thaodangspace/bitbucket-cli/config"
 	"github.com/thaodangspace/bitbucket-cli/output"
@@ -76,6 +77,14 @@ func init() {
 
 // runAPI implements `api <endpoint>`.
 func runAPI(cmd *cobra.Command, args []string) error {
+	// The API command keeps its historical local flags while also honoring
+	// persistent formatting flags placed before `api`.
+	if apiJQ == "" {
+		apiJQ = flagJQ
+	}
+	if apiTemplate == "" {
+		apiTemplate = flagTemplate
+	}
 	if apiJQ != "" && apiTemplate != "" {
 		return fail(fmt.Errorf("--jq and --template are mutually exclusive"))
 	}
@@ -811,129 +820,33 @@ func writePaginatedToFile(pages []any, path string, slurp bool) error {
 	return nil
 }
 
-// --- jq subset ---
+// --- jq ---
 
-type jqAccessor interface{ apply(v any) []any }
-
-type jqKey struct{ name string }
-type jqIndex struct{ idx int }
-type jqIterate struct{}
-
-func (a jqKey) apply(v any) []any {
-	if m, ok := v.(map[string]any); ok {
-		if val, exists := m[a.name]; exists {
-			return []any{val}
-		}
-	}
-	return nil
-}
-
-func (a jqIndex) apply(v any) []any {
-	if arr, ok := v.([]any); ok && a.idx >= 0 && a.idx < len(arr) {
-		return []any{arr[a.idx]}
-	}
-	return nil
-}
-
-func (a jqIterate) apply(v any) []any {
-	switch t := v.(type) {
-	case []any:
-		return t
-	case map[string]any:
-		out := make([]any, 0, len(t))
-		for _, val := range t {
-			out = append(out, val)
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-// jqEvaluate evaluates a small jq subset: dot paths (.a.b), array indexing
-// (.[<n>]), iteration (.[]), object values (.[]), and top-level pipes separated
-// by '|'. Each accessor fans out over the current result set, so a jq result
-// may be more than one value.
+// jqEvaluate uses the maintained gojq implementation so global --jq has real
+// jq semantics, including null results, object construction, select, map, and
+// functions.
 func jqEvaluate(expr string, input any) ([]any, error) {
-	stages := strings.Split(expr, "|")
-	cur := []any{input}
-	for _, st := range stages {
-		st = strings.TrimSpace(st)
-		accs, err := parseJQAccessors(st)
-		if err != nil {
-			return nil, err
+	query, err := gojq.Parse(expr)
+	if err != nil {
+		return nil, err
+	}
+	code, err := gojq.Compile(query)
+	if err != nil {
+		return nil, err
+	}
+	iter := code.Run(input)
+	var results []any
+	for {
+		value, ok := iter.Next()
+		if !ok {
+			break
 		}
-		var next []any
-		for _, v := range cur {
-			res, aerr := applyJQAccessors(v, accs)
-			if aerr != nil {
-				return nil, aerr
-			}
-			next = append(next, res...)
+		if queryErr, ok := value.(error); ok {
+			return nil, queryErr
 		}
-		cur = next
+		results = append(results, value)
 	}
-	return cur, nil
-}
-
-func applyJQAccessors(v any, accs []jqAccessor) ([]any, error) {
-	cur := []any{v}
-	for _, a := range accs {
-		var next []any
-		for _, item := range cur {
-			next = append(next, a.apply(item)...)
-		}
-		cur = next
-	}
-	return cur, nil
-}
-
-func parseJQAccessors(expr string) ([]jqAccessor, error) {
-	if expr == "" {
-		return nil, fmt.Errorf("empty expression")
-	}
-	if expr == "." {
-		return nil, nil
-	}
-	if !strings.HasPrefix(expr, ".") {
-		return nil, fmt.Errorf("unsupported jq expression %q (only .path, .a.b, [<index>], and [] are supported)", expr)
-	}
-	var accs []jqAccessor
-	rest := expr[1:]
-	for rest != "" {
-		switch rest[0] {
-		case '[':
-			j := strings.IndexByte(rest, ']')
-			if j < 0 {
-				return nil, fmt.Errorf("unmatched '[' in jq expression %q", expr)
-			}
-			inner := strings.TrimSpace(rest[1:j])
-			rest = rest[j+1:]
-			if inner == "" {
-				accs = append(accs, jqIterate{})
-				continue
-			}
-			idx, err := strconv.Atoi(inner)
-			if err != nil {
-				return nil, fmt.Errorf("unsupported jq index %q (only integers or [] are supported)", inner)
-			}
-			accs = append(accs, jqIndex{idx: idx})
-		default:
-			end := 0
-			for end < len(rest) && rest[end] != '.' && rest[end] != '[' {
-				end++
-			}
-			if end == 0 {
-				return nil, fmt.Errorf("unsupported jq expression %q", expr)
-			}
-			accs = append(accs, jqKey{name: rest[:end]})
-			rest = rest[end:]
-			if rest != "" && rest[0] == '.' {
-				rest = rest[1:]
-			}
-		}
-	}
-	return accs, nil
+	return results, nil
 }
 
 // --- persistent GET cache ---

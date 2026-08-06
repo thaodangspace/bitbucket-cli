@@ -8,6 +8,7 @@ import (
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 	"github.com/thaodangspace/bitbucket-cli/output"
+	"github.com/thaodangspace/bitbucket-cli/selector"
 
 	"github.com/spf13/cobra"
 )
@@ -25,6 +26,7 @@ func init() {
 		listLimit  int
 		listAuthor string
 		listMine   bool
+		prGetWeb   bool
 	)
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -64,7 +66,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.PullRequestSummary, "No pull requests found."); err != nil {
+			if err := emitListFields(values, output.PullRequestFields, output.PullRequestSummary, "No pull requests found."); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -76,34 +78,65 @@ func init() {
 	listCmd.Flags().BoolVar(&listMine, "mine", false, "Filter to pull requests authored by the authenticated user")
 
 	getCmd := &cobra.Command{
-		Use:   "get <id>",
-		Short: "Get a single pull request by ID",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get [id|url]",
+		Short: "Get a pull request by ID, URL, or current branch",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
-			if err != nil {
-				return fail(err)
+			var selected selector.PullRequestSelector
+			var err error
+			if len(args) == 1 {
+				selected, err = parsePullRequestSelector(args[0])
+				if err != nil {
+					return fail(err)
+				}
 			}
 			cfg, client, err := newClient()
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			ref, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}
+			if selected.ID == 0 {
+				branch, berr := currentGitBranch()
+				if berr != nil {
+					return fail(berr)
+				}
+				q := url.Values{"q": {fmt.Sprintf("source.branch.name=%q", branch)}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
+				values, perr := client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, q.Encode()), 1, bitbucket.DefaultMaxPages)
+				if perr != nil {
+					return fail(perr)
+				}
+				if len(values) == 0 {
+					return fail(fmt.Errorf("no pull request found for current branch %q", branch))
+				}
+				var item map[string]any
+				if perr = json.Unmarshal(values[0], &item); perr != nil {
+					return fail(perr)
+				}
+				id, ok := item["id"].(float64)
+				if !ok || id <= 0 {
+					return fail(fmt.Errorf("current branch pull request has no valid ID"))
+				}
+				selected.ID = int(id)
+			}
+			if prGetWeb {
+				return openWeb(buildPRURL(ref.Workspace, ref.RepoSlug, selected.ID))
+			}
 
 			var raw json.RawMessage
-			path := fmt.Sprintf("%s/pullrequests/%d", base, id)
+			path := fmt.Sprintf("%s/pullrequests/%d", base, selected.ID)
 			if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.PullRequestSummary); err != nil {
+			if err := emitObjectFields(raw, output.PullRequestFields, output.PullRequestSummary); err != nil {
 				return fail(err)
 			}
 			return nil
 		},
 	}
+	getCmd.Flags().BoolVar(&prGetWeb, "web", false, "Open the pull request in a browser")
 
 	var commentsLimit int
 	commentsCmd := &cobra.Command{
@@ -111,7 +144,7 @@ func init() {
 		Short: "List comments on a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
+			selected, err := parsePullRequestSelector(args[0])
 			if err != nil {
 				return fail(err)
 			}
@@ -119,17 +152,17 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			_, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}
 
-			path := fmt.Sprintf("%s/pullrequests/%d/comments?pagelen=%d", base, id, bitbucket.DefaultPageLen)
+			path := fmt.Sprintf("%s/pullrequests/%d/comments?pagelen=%d", base, selected.ID, bitbucket.DefaultPageLen)
 			values, err := client.Paginate(ctx(cmd), path, commentsLimit, bitbucket.DefaultMaxPages)
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.CommentSummary, "No comments found."); err != nil {
+			if err := emitListFields(values, output.CommentFields, output.CommentSummary, "No comments found."); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -143,7 +176,7 @@ func init() {
 		Short: "List commits on a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
+			selected, err := parsePullRequestSelector(args[0])
 			if err != nil {
 				return fail(err)
 			}
@@ -151,17 +184,17 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			_, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}
 
-			path := fmt.Sprintf("%s/pullrequests/%d/commits?pagelen=%d", base, id, bitbucket.DefaultPageLen)
+			path := fmt.Sprintf("%s/pullrequests/%d/commits?pagelen=%d", base, selected.ID, bitbucket.DefaultPageLen)
 			values, err := client.Paginate(ctx(cmd), path, commitsLimit, bitbucket.DefaultMaxPages)
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.CommitSummary, "No commits found."); err != nil {
+			if err := emitListFields(values, output.CommitFields, output.CommitSummary, "No commits found."); err != nil {
 				return fail(err)
 			}
 			return nil
