@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/thaodangspace/bitbucket-cli/auth"
+	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -25,6 +26,7 @@ func resetFlags(cmd *cobra.Command) {
 		_ = f.Value.Set(f.DefValue)
 		f.Changed = false
 	})
+	cmd.SetContext(nil)
 	for _, sub := range cmd.Commands() {
 		resetFlags(sub)
 	}
@@ -57,6 +59,7 @@ func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string
 	t.Setenv("BITBUCKET_DEFAULT_REPO", "repo")
 	// Never read the developer's real config or keychain in tests.
 	t.Setenv("BITBUCKET_CONFIG", cfgPath)
+	t.Setenv("BITBUCKET_CACHE_DIR", t.TempDir())
 	auth.SetGlobalStore(auth.NewMemoryStore())
 	t.Cleanup(func() { auth.SetGlobalStore(nil) })
 
@@ -66,6 +69,12 @@ func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string
 	flagStatusJSON, flagLogoutYes = false, false
 	resetFlags(rootCmd)
 	attachFiles, attachMessage = nil, ""
+	apiMethod = ""
+	apiHeaders, apiRawField, apiField = nil, nil, nil
+	apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""
+	apiPaginate, apiSlurp, apiInclude, apiSilent = false, false, false, false
+	apiMaxPages = bitbucket.DefaultMaxPages
+	apiCacheStore.m = map[string]apiCacheEntry{}
 	testTransport = transport
 	t.Cleanup(func() { testTransport = nil })
 

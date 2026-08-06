@@ -9,6 +9,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -291,5 +292,145 @@ func TestForbiddenIncludesRequiredScope(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "write:repository:bitbucket") {
 		t.Fatalf("403 message should name the required scope: %v", err)
+	}
+}
+
+func TestDoStreamsBodyAndHeaders(t *testing.T) {
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Header:     http.Header{"Content-Type": {"text/plain"}, "X-Custom": {"v"}},
+			Body:       io.NopCloser(strings.NewReader("streamed")),
+		}, nil
+	})
+	resp, err := c.Do(context.Background(), "/x", RequestOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if resp.Header.Get("X-Custom") != "v" {
+		t.Fatalf("missing header: %v", resp.Header)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "streamed" {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestDoRawBodyAndHeaders(t *testing.T) {
+	var captured *http.Request
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		captured = r
+		return jsonResponse(201, `{}`), nil
+	})
+	headers := http.Header{"Accept": {"text/plain"}, "X-Trace": {"1"}}
+	raw := []byte(`{"title":"raw"}`)
+	resp, err := c.Do(context.Background(), "/x", RequestOptions{Method: http.MethodPost, RawBody: raw, Headers: headers})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+	if captured.Header.Get("Accept") != "text/plain" {
+		t.Fatalf("custom Accept not honored: %q", captured.Header.Get("Accept"))
+	}
+	if captured.Method != http.MethodPost {
+		t.Fatalf("method = %s", captured.Method)
+	}
+	body, _ := io.ReadAll(captured.Body)
+	if string(body) != `{"title":"raw"}` {
+		t.Fatalf("raw body = %q", body)
+	}
+}
+
+func TestDoBodyAndRawBodyConflict(t *testing.T) {
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{}`), nil
+	})
+	_, err := c.Do(context.Background(), "/x", RequestOptions{Body: map[string]any{"a": 1}, RawBody: []byte("b")})
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+}
+
+func TestDoAppendsQuery(t *testing.T) {
+	var gotURL string
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		gotURL = r.URL.String()
+		return jsonResponse(200, `{}`), nil
+	})
+	_, err := c.Do(context.Background(), "/x?existing=1", RequestOptions{Query: url.Values{"a": {"1", "2"}}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotURL != "https://api.bitbucket.org/2.0/x?a=1&a=2&existing=1" {
+		t.Fatalf("unexpected url: %s", gotURL)
+	}
+}
+
+func TestDoAllowsURLValuedRelativeQuery(t *testing.T) {
+	var gotURL string
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		gotURL = r.URL.String()
+		return jsonResponse(200, `{}`), nil
+	})
+	_, err := c.Do(context.Background(), "/x?redirect=https://example.com", RequestOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotURL != "https://api.bitbucket.org/2.0/x?redirect=https://example.com" {
+		t.Fatalf("unexpected url: %s", gotURL)
+	}
+}
+
+func TestPaginateDetectsLoop(t *testing.T) {
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"values":[{"id":1}],"next":"https://api.bitbucket.org/2.0/loop"}`), nil
+	})
+	_, err := c.Paginate(context.Background(), "/loop", 10, 5)
+	if err == nil {
+		t.Fatal("expected loop detection error")
+	}
+	if !strings.Contains(err.Error(), "pagination loop") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRetriesOn429WithRetryAfter(t *testing.T) {
+	calls := 0
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 1 {
+			h := http.Header{}
+			h.Set("Retry-After", "1")
+			return &http.Response{StatusCode: 429, Header: h, Body: io.NopCloser(strings.NewReader(`{"error":{"message":"slow down"}}`))}, nil
+		}
+		return jsonResponse(200, `{"ok":true}`), nil
+	})
+	_, err := c.Do(context.Background(), "/x", RequestOptions{Method: http.MethodGet})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected retry to succeed, calls=%d", calls)
+	}
+}
+
+func TestNoRetryOnNonIdempotent(t *testing.T) {
+	calls := 0
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		calls++
+		h := http.Header{}
+		h.Set("Retry-After", "1")
+		return &http.Response{StatusCode: 429, Header: h, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})
+	_, err := c.Do(context.Background(), "/x", RequestOptions{Method: http.MethodPost})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if calls != 1 {
+		t.Fatalf("POST must not be retried, calls=%d", calls)
 	}
 }

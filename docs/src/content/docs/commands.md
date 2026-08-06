@@ -86,3 +86,88 @@ bitbucket-cli pipeline get <uuid>
 
 Pipeline states include `PENDING`, `IN_PROGRESS`, `COMPLETED`, `PAUSED`,
 `HALTED`, and `ERROR`.
+
+## Generic `api` command
+
+`api` is an escape hatch for any Bitbucket Cloud REST 2.0 endpoint that is newly
+released or not yet wrapped by a typed command. It mirrors the behavior of
+`gh api`.
+
+```sh
+bitbucket-cli api <endpoint> [flags]
+```
+
+Flags:
+
+- `-X, --method` — GET (default), POST, PUT, PATCH, DELETE, HEAD, or OPTIONS.
+- `-H, --header key:value` — additional request header (repeatable).
+- `-f, --raw-field key=value` — always sends the value as a string (repeatable).
+- `-F, --field key=value` — typed value; `true`, `false`, `null`, and integers
+  are JSON-typed. Supports nesting (`target[ref_type]=branch`) and repeated
+  arrays (`variables[]=a`).
+- `--input FILE|-` — send a raw request body from a file or stdin.
+- `--paginate` — follow Bitbucket `next` links and emit each JSON page.
+  `--slurp` wraps all pages in an array; `--jq`/`--template` apply per page
+  unless `--slurp` is set. `--max-pages N` bounds traversal; `0` is unlimited.
+- `-i, --include` — print the response status and headers before the body.
+- `--silent` — discard the response body.
+- `-o, --output FILE` — write the raw response body to a file (no excerpt
+  truncation).
+- `-q, --jq EXPR` — filter JSON output (subset: `.a.b`, `.[<n>]`, `.[]`, `|`).
+- `-t, --template EXPR` — format JSON output with a Go template (`json` and
+  `pretty` helpers are provided).
+- `--cache DURATION` — persist GET responses in the user cache for the given
+  duration (e.g. `30s`, `2m`). Cache entries are restricted to the current user.
+
+Endpoint resolution accepts relative paths such as
+`/repositories/{workspace}/{repo}/pullrequests` (placeholders expand from the
+usual flags/config/git remote) or absolute `https://api.bitbucket.org/...`
+URLs. Absolute URLs on other hosts are rejected. `-f`/`-F` fields are sent in
+the JSON request body for POST/PUT/PATCH, and as query parameters for other
+methods or when `--input` is used.
+
+`--input` is mutually exclusive with fields in the request body. When both are
+needed, the fields are encoded as query parameters and the input remains the
+raw request body.
+
+```sh
+# Read the current user
+bitbucket-cli api /user
+
+# List and paginate PRs
+bitbucket-cli api /repositories/{workspace}/{repo}/pullrequests --paginate
+
+# Approve a PR (write operation)
+bitbucket-cli api /repositories/{workspace}/{repo}/pullrequests/42/approve -X POST
+
+# Trigger a pipeline with nested + typed fields
+bitbucket-cli api /repositories/{workspace}/{repo}/pipelines \
+  -X POST -F 'target[ref_type]=branch' -F 'target[ref_name]=main'
+
+# Download a raw PR diff
+bitbucket-cli api /repositories/{workspace}/{repo}/pullrequests/42/diff --output pr.diff
+
+# Create a repository webhook (write operation)
+bitbucket-cli api /repositories/{workspace}/{repo}/hooks -X POST \
+  -F 'description=CI' \
+  -F 'url=https://ci.example.com/bitbucket-hook' \
+  -F 'active=true'
+```
+
+:::danger[Write safety]
+`api` is a **write operation** whenever `--method` is POST, PUT, PATCH, or
+DELETE. Run it only when the user has explicitly asked for the change.
+:::
+
+### `api` security notes
+
+- Non-2xx responses are returned as structured errors whose excerpt is truncated
+  and has any configured token redacted. Credentials never appear in the error
+  output.
+- `--output` writes the raw response body unchanged — the file may contain
+  sensitive data, so treat it accordingly.
+- Request bodies sent via `-f`/`-F`/`--input` can contain secrets; avoid logging
+  them. Prefer Bitbucket scoped tokens (`BITBUCKET_TOKEN_TYPE=access` or OAuth)
+  for automation.
+- Webhook resource URLs (for example, when configuring webhooks) are external;
+  the CLI rejects absolute API hosts other than `api.bitbucket.org`.
