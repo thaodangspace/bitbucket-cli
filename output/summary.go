@@ -47,6 +47,23 @@ func CommentSummary(comment map[string]any) string {
 	return fmt.Sprintf("#%s: %s", id, raw)
 }
 
+// TaskSummary renders "#<id>: <raw> [<state>]".
+func TaskSummary(task map[string]any) string {
+	id := "?"
+	if v, ok := task["id"]; ok {
+		id = fmt.Sprintf("%v", numberish(v))
+	}
+	body := ""
+	if content, ok := task["content"].(map[string]any); ok {
+		body, _ = str(content, "raw")
+	}
+	state, _ := str(task, "state")
+	if state == "" {
+		state = "UNKNOWN"
+	}
+	return fmt.Sprintf("#%s: %s [%s]", id, body, state)
+}
+
 // CommitSummary renders "<hash[:12]> <message>" trimmed.
 func CommitSummary(commit map[string]any) string {
 	hash := "unknown"

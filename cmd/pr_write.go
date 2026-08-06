@@ -21,7 +21,7 @@ import (
 // clear), while a bare flag counts only when non-empty.
 func readBody(text, file string, stdin io.Reader) (value string, provided bool, err error) {
 	if text != "" && file != "" {
-		return "", false, fmt.Errorf("use only one of --description / --description-file")
+		return "", false, fmt.Errorf("use only one of the body text or body file sources")
 	}
 	if file != "" {
 		if file == "-" {
