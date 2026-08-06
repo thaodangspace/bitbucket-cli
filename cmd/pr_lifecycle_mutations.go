@@ -92,8 +92,15 @@ func addLifecycleCommands() {
 			}
 			if resp.StatusCode == http.StatusAccepted {
 				taskID := mergeTaskID(value)
+				if location := resp.Header.Get("Location"); location != "" {
+					locatedID, locationErr := mergeTaskIDFromLocation(location)
+					if locationErr != nil {
+						return fail(locationErr)
+					}
+					taskID = locatedID
+				}
 				if taskID == "" {
-					return fail(fmt.Errorf("Bitbucket accepted merge but returned no task identifier"))
+					return fail(fmt.Errorf("Bitbucket accepted merge but returned no task identifier or valid Location header"))
 				}
 				if mergeAsync {
 					return renderJSON(map[string]any{"accepted": true, "task_id": taskID})
@@ -205,30 +212,73 @@ func addLifecycleCommands() {
 			if err != nil {
 				return fail(err)
 			}
-			q := url.Values{"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
-			filters := make([]string, 0, 2)
+			var values []json.RawMessage
 			if mine {
-				filters = append(filters, fmt.Sprintf("author.account_id=%q", account))
+				mineValues, err := client.PaginateAll(ctx(cmd), fmt.Sprintf("/workspaces/%s/pullrequests/%s?pagelen=%d", bitbucket.EncodePathSegment(ws), url.PathEscape(account), bitbucket.DefaultPageLen), bitbucket.DefaultMaxPages)
+				if err != nil {
+					return fail(err)
+				}
+				values = append(values, mineValues...)
 			}
 			if reviewRequested {
-				filters = append(filters, fmt.Sprintf("reviewers.account_id=%q", account))
+				ref, _, err := resolveRepo(cfg)
+				if err != nil {
+					return fail(err)
+				}
+				ref.Workspace = ws
+				q := url.Values{"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}, "q": {fmt.Sprintf("state=%q AND reviewers.account_id=%q", "OPEN", account)}}
+				reviewValues, err := client.PaginateAll(ctx(cmd), fmt.Sprintf("/repositories/%s/%s/pullrequests?%s", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.RepoSlug), q.Encode()), bitbucket.DefaultMaxPages)
+				if err != nil {
+					return fail(err)
+				}
+				values = append(values, reviewValues...)
 			}
-			if len(filters) == 1 {
-				q.Set("q", filters[0])
-			} else {
-				q.Set("q", strings.Join(filters, " OR "))
-			}
-			values, err := client.Paginate(ctx(cmd), fmt.Sprintf("/workspaces/%s/pullrequests?%s", bitbucket.EncodePathSegment(ws), q.Encode()), 0, bitbucket.DefaultMaxPages)
-			if err != nil {
-				return fail(err)
-			}
-			return emitListFields(values, nil, output.PullRequestSummary, "No pull requests found.")
+			return emitListFields(dedupePullRequests(values), nil, output.PullRequestSummary, "No pull requests found.")
 		},
 	}
 	statusCmd.Flags().StringVar(&workspace, "workspace", "", "Workspace slug for status views")
 	statusCmd.Flags().BoolVar(&mine, "mine", false, "Show pull requests authored by the current account")
 	statusCmd.Flags().BoolVar(&reviewRequested, "review-requested", false, "Show pull requests where the current account is a reviewer")
 	prCmd.AddCommand(statusCmd)
+}
+
+func mergeTaskIDFromLocation(location string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(location))
+	if err != nil || u.Path == "" {
+		return "", fmt.Errorf("invalid merge task Location %q", location)
+	}
+	if u.IsAbs() && (u.Scheme != "https" || strings.ToLower(u.Hostname()) != "api.bitbucket.org" || u.Port() != "" || u.User != nil) {
+		return "", fmt.Errorf("merge task Location must point to api.bitbucket.org")
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) == 0 || parts[len(parts)-1] == "" {
+		return "", fmt.Errorf("merge task Location has no task identifier")
+	}
+	id, err := url.PathUnescape(parts[len(parts)-1])
+	if err != nil || id == "" {
+		return "", fmt.Errorf("merge task Location has invalid task identifier")
+	}
+	return id, nil
+}
+
+func dedupePullRequests(values []json.RawMessage) []json.RawMessage {
+	seen := map[string]bool{}
+	out := make([]json.RawMessage, 0, len(values))
+	for _, raw := range values {
+		var item map[string]any
+		if json.Unmarshal(raw, &item) != nil {
+			continue
+		}
+		key := fmt.Sprint(item["id"])
+		if key == "<nil>" {
+			key = string(raw)
+		}
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, raw)
+		}
+	}
+	return out
 }
 
 func waitForMergeTask(cmd *cobra.Command, prctx repoContext, prID int, taskID string, interval, timeout time.Duration) error {
@@ -246,12 +296,13 @@ func waitForMergeTask(cmd *cobra.Command, prctx repoContext, prID int, taskID st
 		if err != nil {
 			return fail(err)
 		}
-		state := strings.ToUpper(firstString(value, "status", "state", "result"))
+		state := strings.ToUpper(firstString(value, "task_status", "status", "state", "result"))
 		switch state {
-		case "SUCCESSFUL", "COMPLETED", "MERGED":
+		case "SUCCESS", "SUCCESSFUL", "COMPLETED", "MERGED":
 			return renderJSON(value)
 		case "FAILED", "ERROR", "STOPPED", "CANCELLED":
-			return fail(fmt.Errorf("pull request merge task %s failed", taskID))
+			payload, _ := json.Marshal(value)
+			return fail(fmt.Errorf("pull request merge task %s failed: %s", taskID, payload))
 		}
 		timer := time.NewTimer(interval)
 		select {

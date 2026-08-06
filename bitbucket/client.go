@@ -527,6 +527,17 @@ func (c *Client) Paginate(ctx context.Context, pathOrURL string, limit, maxPages
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
+	return c.paginate(ctx, pathOrURL, limit, maxPages)
+}
+
+// PaginateAll follows every `next` link up to maxPages. It is intended for
+// commands whose contract promises a complete result rather than the CLI's
+// default bounded result size.
+func (c *Client) PaginateAll(ctx context.Context, pathOrURL string, maxPages int) ([]json.RawMessage, error) {
+	return c.paginate(ctx, pathOrURL, 0, maxPages)
+}
+
+func (c *Client) paginate(ctx context.Context, pathOrURL string, limit, maxPages int) ([]json.RawMessage, error) {
 	if maxPages <= 0 {
 		maxPages = DefaultMaxPages
 	}
@@ -536,7 +547,7 @@ func (c *Client) Paginate(ctx context.Context, pathOrURL string, limit, maxPages
 	pages := 0
 	seen := map[string]bool{pathOrURL: true}
 
-	for next != "" && len(values) < limit && pages < maxPages {
+	for next != "" && (limit == 0 || len(values) < limit) && pages < maxPages {
 		var p page
 		if err := c.Request(ctx, next, RequestOptions{}, &p); err != nil {
 			return nil, err
@@ -553,7 +564,7 @@ func (c *Client) Paginate(ctx context.Context, pathOrURL string, limit, maxPages
 		pages++
 	}
 
-	if len(values) > limit {
+	if limit > 0 && len(values) > limit {
 		values = values[:limit]
 	}
 	return values, nil

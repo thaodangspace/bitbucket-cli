@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 	"github.com/thaodangspace/bitbucket-cli/output"
@@ -85,7 +86,16 @@ func init() {
 		Short:   "View a pull request by ID, URL, or current branch",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.CalledAs() == "view" {
+			useView := cmd.CalledAs() == "view"
+			if cmd.CalledAs() == "get" {
+				useView = len(args) == 0 || prViewComments || prViewActivity
+				if len(args) == 1 {
+					if _, selectorErr := parsePullRequestSelector(args[0]); selectorErr == nil || strings.Contains(args[0], "/") {
+						useView = true
+					}
+				}
+			}
+			if useView {
 				return runPRView(cmd, args, prViewComments, prViewActivity, prGetWeb)
 			}
 			var selected selector.PullRequestSelector

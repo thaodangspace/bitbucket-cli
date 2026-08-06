@@ -222,6 +222,24 @@ func TestPaginateFollowsNext(t *testing.T) {
 	}
 }
 
+func TestPaginateAllFollowsEveryPage(t *testing.T) {
+	calls := 0
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 1 {
+			return jsonResponse(200, `{"values":[{"id":1}],"next":"https://api.bitbucket.org/2.0/next-page"}`), nil
+		}
+		return jsonResponse(200, `{"values":[{"id":2}]}`), nil
+	})
+	values, err := c.PaginateAll(context.Background(), "/first", 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(values) != 2 || calls != 2 {
+		t.Fatalf("expected both pages, values=%d calls=%d", len(values), calls)
+	}
+}
+
 func TestPaginateRespectsLimit(t *testing.T) {
 	c := testClient(func(r *http.Request) (*http.Response, error) {
 		return jsonResponse(200, `{"values":[{"id":1},{"id":2},{"id":3}]}`), nil

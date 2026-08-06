@@ -67,7 +67,7 @@ func resolvePRContext(cmd *cobra.Command, args []string) (selector.PullRequestSe
 		"q":       {fmt.Sprintf("source.branch.name=%q", branch)},
 		"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)},
 	}
-	values, err := client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, q.Encode()), 0, bitbucket.DefaultMaxPages)
+	values, err := client.PaginateAll(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, q.Encode()), bitbucket.DefaultMaxPages)
 	if err != nil {
 		return selected, repoContext{}, err
 	}
@@ -199,14 +199,14 @@ func runPRView(cmd *cobra.Command, args []string, viewComments, viewActivity, vi
 	}
 	result["pull_request"] = pr
 	if viewComments {
-		values, err := prctx.client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests/%d/comments?pagelen=%d", prctx.base, selected.ID, bitbucket.DefaultPageLen), 0, bitbucket.DefaultMaxPages)
+		values, err := prctx.client.PaginateAll(ctx(cmd), fmt.Sprintf("%s/pullrequests/%d/comments?pagelen=%d", prctx.base, selected.ID, bitbucket.DefaultPageLen), bitbucket.DefaultMaxPages)
 		if err != nil {
 			return fail(err)
 		}
 		result["comments"] = rawValues(values)
 	}
 	if viewActivity {
-		values, err := prctx.client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests/%d/activity?pagelen=%d", prctx.base, selected.ID, bitbucket.DefaultPageLen), 0, bitbucket.DefaultMaxPages)
+		values, err := prctx.client.PaginateAll(ctx(cmd), fmt.Sprintf("%s/pullrequests/%d/activity?pagelen=%d", prctx.base, selected.ID, bitbucket.DefaultPageLen), bitbucket.DefaultMaxPages)
 		if err != nil {
 			return fail(err)
 		}
@@ -246,7 +246,7 @@ func init() {
 			}
 			path := fmt.Sprintf("%s/pullrequests/%d%s", prctx.base, selected.ID, suffix)
 			if diffNames {
-				values, err := prctx.client.Paginate(ctx(cmd), path, 0, bitbucket.DefaultMaxPages)
+				values, err := prctx.client.PaginateAll(ctx(cmd), path, bitbucket.DefaultMaxPages)
 				if err != nil {
 					return fail(err)
 				}
@@ -382,7 +382,7 @@ func writeDiffNameValues(values []json.RawMessage) error {
 }
 
 func clientPaginateChecks(ctx context.Context, prctx repoContext, id int) ([]json.RawMessage, error) {
-	return prctx.client.Paginate(ctx, fmt.Sprintf("%s/pullrequests/%d/statuses?pagelen=%d", prctx.base, id, bitbucket.DefaultPageLen), 0, bitbucket.DefaultMaxPages)
+	return prctx.client.PaginateAll(ctx, fmt.Sprintf("%s/pullrequests/%d/statuses?pagelen=%d", prctx.base, id, bitbucket.DefaultPageLen), bitbucket.DefaultMaxPages)
 }
 
 func checkStates(values []json.RawMessage) (failed, pending bool) {
