@@ -346,12 +346,12 @@ type UploadFile struct {
 }
 
 func buildURL(pathOrURL string) (string, error) {
-	if strings.Contains(pathOrURL, "://") {
-		u, err := url.Parse(pathOrURL)
-		if err != nil {
-			return "", fmt.Errorf("parse request URL: %w", err)
-		}
-		if u.Scheme != "https" || strings.ToLower(u.Hostname()) != "api.bitbucket.org" || u.User != nil {
+	u, err := url.Parse(pathOrURL)
+	if err != nil {
+		return "", fmt.Errorf("parse request URL: %w", err)
+	}
+	if u.IsAbs() {
+		if u.Scheme != "https" || strings.ToLower(u.Hostname()) != "api.bitbucket.org" || u.Port() != "" || u.User != nil {
 			return "", fmt.Errorf("request URL must use https://api.bitbucket.org (got %q)", pathOrURL)
 		}
 		return u.String(), nil

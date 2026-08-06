@@ -3,12 +3,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +41,7 @@ var (
 	apiJQ       string
 	apiTemplate string
 	apiCache    string
+	apiMaxPages int
 )
 
 func init() {
@@ -66,7 +69,8 @@ func init() {
 	apiCmd.Flags().StringVarP(&apiOutput, "output", "o", "", "Write the raw response body to a file instead of stdout")
 	apiCmd.Flags().StringVarP(&apiJQ, "jq", "q", "", "Apply a jq expression to JSON output (supports .foo, .foo.bar, [<index>], [])")
 	apiCmd.Flags().StringVarP(&apiTemplate, "template", "t", "", "Format JSON output with a Go template (adds 'json' and 'pretty' helpers)")
-	apiCmd.Flags().StringVar(&apiCache, "cache", "", "Cache GET responses in memory for this duration (e.g. 30s, 2m)")
+	apiCmd.Flags().StringVar(&apiCache, "cache", "", "Cache GET responses for this duration (e.g. 30s, 2m)")
+	apiCmd.Flags().IntVar(&apiMaxPages, "max-pages", bitbucket.DefaultMaxPages, "Maximum pages to follow with --paginate (0 means unlimited)")
 	rootCmd.AddCommand(apiCmd)
 }
 
@@ -85,6 +89,9 @@ func runAPI(cmd *cobra.Command, args []string) error {
 	}
 	if apiPaginate && method != http.MethodGet {
 		return fail(fmt.Errorf("--paginate is only supported with GET requests"))
+	}
+	if apiPaginate && apiMaxPages < 0 {
+		return fail(fmt.Errorf("--max-pages must be positive or 0 for unlimited pagination"))
 	}
 	if apiOutput != "" && (apiJQ != "" || apiTemplate != "") {
 		return fail(fmt.Errorf("--output cannot be combined with --jq or --template"))
@@ -142,13 +149,15 @@ func runAPI(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if apiPaginate {
-		return runAPIPaginate(ctx(cmd), client, endpoint, opts)
-	}
-
 	cacheKey := ""
 	if cacheTTL > 0 && method == http.MethodGet {
-		cacheKey = method + " " + endpoint + "?" + opts.Query.Encode()
+		cacheKey = makeAPICacheKey(cfg, endpoint, opts)
+	}
+	if apiPaginate {
+		return runAPIPaginate(ctx(cmd), client, endpoint, opts, apiMaxPages, cacheTTL, cacheKey)
+	}
+
+	if cacheKey != "" {
 		if r, ok := apiCacheGet(cacheKey); ok {
 			defer r.Body.Close()
 			return apiEmit(r)
@@ -160,7 +169,7 @@ func runAPI(cmd *cobra.Command, args []string) error {
 		return fail(err)
 	}
 
-	if cacheTTL > 0 && method == http.MethodGet && resp.StatusCode < 300 {
+	if cacheKey != "" && resp.StatusCode < 300 {
 		payload, rerr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if rerr != nil {
@@ -180,7 +189,7 @@ func runAPI(cmd *cobra.Command, args []string) error {
 // runAPIPaginate follows `next` links for GET requests. Like gh api,
 // pagination emits each response page by default and emits an array of pages
 // when --slurp is set. Filters run per page unless --slurp is set.
-func runAPIPaginate(ctx context.Context, client *bitbucket.Client, endpoint string, opts bitbucket.RequestOptions) error {
+func runAPIPaginate(ctx context.Context, client *bitbucket.Client, endpoint string, opts bitbucket.RequestOptions, maxPages int, cacheTTL time.Duration, cacheKey string) error {
 	var responses []any
 	cursor := endpoint
 	first := true
@@ -188,7 +197,7 @@ func runAPIPaginate(ctx context.Context, client *bitbucket.Client, endpoint stri
 	var firstStatus int
 	var firstHeader http.Header
 
-	for pages := 0; pages < bitbucket.DefaultMaxPages; pages++ {
+	for pages := 0; maxPages == 0 || pages < maxPages; pages++ {
 		if !first {
 			// Bitbucket's next link is already a complete URL, including the
 			// server-selected cursor. Do not carry the first request's fields.
@@ -198,18 +207,38 @@ func runAPIPaginate(ctx context.Context, client *bitbucket.Client, endpoint stri
 			return fail(err)
 		}
 
-		resp, err := client.Do(ctx, cursor, opts)
-		if err != nil {
-			return fail(err)
+		pageCacheKey := ""
+		if cacheKey != "" {
+			pageCacheKey = cacheKey + "\npage=" + cursor
+		}
+		var payload []byte
+		var status int
+		var header http.Header
+		if pageCacheKey != "" {
+			if cached, ok := apiCacheGet(pageCacheKey); ok {
+				status, header = cached.StatusCode, cached.Header
+				payload, _ = io.ReadAll(cached.Body)
+				cached.Body.Close()
+			}
+		}
+		if payload == nil {
+			resp, err := client.Do(ctx, cursor, opts)
+			if err != nil {
+				return fail(err)
+			}
+			status, header = resp.StatusCode, resp.Header.Clone()
+			payload, err = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return fail(fmt.Errorf("read paginated response body: %w", err))
+			}
+			if pageCacheKey != "" {
+				apiCachePut(pageCacheKey, status, header, payload, cacheTTL)
+			}
 		}
 		if first {
-			firstStatus = resp.StatusCode
-			firstHeader = resp.Header.Clone()
-		}
-		payload, rerr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if rerr != nil {
-			return fail(fmt.Errorf("read paginated response body: %w", rerr))
+			firstStatus = status
+			firstHeader = header
 		}
 
 		var page any
@@ -234,18 +263,18 @@ func runAPIPaginate(ctx context.Context, client *bitbucket.Client, endpoint stri
 		seen[nextValue] = true
 		cursor = nextValue
 		first = false
-		if pages == bitbucket.DefaultMaxPages-1 {
-			return fail(fmt.Errorf("pagination exceeded the maximum of %d pages", bitbucket.DefaultMaxPages))
+		if maxPages > 0 && pages == maxPages-1 {
+			return fail(fmt.Errorf("pagination exceeded the maximum of %d pages", maxPages))
 		}
 	}
 
-	if apiSilent {
-		return nil
-	}
 	if apiInclude {
 		if err := writeHeaders(os.Stdout, firstStatus, firstHeader); err != nil {
 			return fail(err)
 		}
+	}
+	if apiSilent {
+		return nil
 	}
 	if apiJQ != "" {
 		return emitJQPaginated(responses, apiJQ, apiSlurp)
@@ -293,14 +322,14 @@ func apiEmit(resp *bitbucket.Response) error {
 		return nil
 	}
 
-	if apiSilent {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return nil
-	}
 	if apiInclude {
 		if err := writeHeaders(os.Stdout, status, resp.Header); err != nil {
 			return fail(err)
 		}
+	}
+	if apiSilent {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil
 	}
 
 	if apiJQ != "" || apiTemplate != "" {
@@ -583,12 +612,20 @@ type fieldNode struct {
 
 func setFieldLeaf(n *fieldNode, toks []string, i int, val any) error {
 	if i == len(toks) {
+		if n.children != nil || n.items != nil || n.array {
+			return fmt.Errorf("field shape conflict: cannot replace an object or array with a scalar")
+		}
+		// Repeating the exact same key is a deliberate overwrite, matching the
+		// usual last-value-wins behavior of command-line field flags.
 		n.value = val
 		n.hasValue = true
 		return nil
 	}
 	tok := toks[i]
 	if tok == "" {
+		if n.hasValue || n.children != nil {
+			return fmt.Errorf("field shape conflict: cannot append an array item to a scalar or object")
+		}
 		n.array = true
 		if i == len(toks)-1 {
 			n.items = append(n.items, &fieldNode{value: val, hasValue: true})
@@ -598,8 +635,8 @@ func setFieldLeaf(n *fieldNode, toks []string, i int, val any) error {
 		n.items = append(n.items, child)
 		return setFieldLeaf(child, toks, i+1, val)
 	}
-	if n.items != nil {
-		return fmt.Errorf("field %q mixes array and object indexing", tok)
+	if n.hasValue || n.items != nil || n.array {
+		return fmt.Errorf("field shape conflict: cannot add an object key to a scalar or array")
 	}
 	if n.children == nil {
 		n.children = map[string]*fieldNode{}
@@ -899,8 +936,10 @@ func parseJQAccessors(expr string) ([]jqAccessor, error) {
 	return accs, nil
 }
 
-// --- in-memory GET cache ---
+// --- persistent GET cache ---
 
+// The memory layer avoids disk I/O for repeated requests in one process. The
+// disk layer makes --cache useful across normal CLI invocations.
 type apiCacheEntry struct {
 	status  int
 	header  http.Header
@@ -908,36 +947,131 @@ type apiCacheEntry struct {
 	expires time.Time
 }
 
+type apiCacheFile struct {
+	Status  int         `json:"status"`
+	Header  http.Header `json:"header"`
+	Body    []byte      `json:"body"`
+	Expires time.Time   `json:"expires"`
+}
+
 var apiCacheStore = struct {
 	sync.Mutex
 	m map[string]apiCacheEntry
 }{m: map[string]apiCacheEntry{}}
 
+func makeAPICacheKey(cfg config.Config, endpoint string, opts bitbucket.RequestOptions) string {
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(cfg.APIToken)))
+	var headers strings.Builder
+	keys := make([]string, 0, len(opts.Headers))
+	for key := range opts.Headers {
+		keys = append(keys, strings.ToLower(key))
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		for _, value := range opts.Headers.Values(key) {
+			fmt.Fprintf(&headers, "%s:%s\n", key, value)
+		}
+	}
+	return fmt.Sprintf("GET\n%s\n%s\n%s\n%s\n%s", endpoint, opts.Query.Encode(), headers.String(), cfg.TokenType, tokenHash)
+}
+
 func apiCacheGet(key string) (*bitbucket.Response, bool) {
+	now := time.Now()
 	apiCacheStore.Lock()
-	defer apiCacheStore.Unlock()
 	e, ok := apiCacheStore.m[key]
-	if !ok {
-		return nil, false
+	if ok && now.Before(e.expires) {
+		apiCacheStore.Unlock()
+		return cachedResponse(e), true
 	}
-	if time.Now().After(e.expires) {
+	if ok {
 		delete(apiCacheStore.m, key)
+	}
+	apiCacheStore.Unlock()
+
+	path, err := apiCachePath(key)
+	if err != nil {
 		return nil, false
 	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var diskFile apiCacheFile
+	if err := json.Unmarshal(data, &diskFile); err != nil || !now.Before(diskFile.Expires) {
+		_ = os.Remove(path)
+		return nil, false
+	}
+	disk := apiCacheEntry{status: diskFile.Status, header: diskFile.Header, body: diskFile.Body, expires: diskFile.Expires}
+	apiCacheStore.Lock()
+	apiCacheStore.m[key] = disk
+	apiCacheStore.Unlock()
+	return cachedResponse(disk), true
+}
+
+func cachedResponse(e apiCacheEntry) *bitbucket.Response {
 	return &bitbucket.Response{
 		StatusCode: e.status,
-		Header:     e.header,
+		Header:     e.header.Clone(),
 		Body:       io.NopCloser(bytes.NewReader(e.body)),
-	}, true
+	}
 }
 
 func apiCachePut(key string, status int, header http.Header, body []byte, ttl time.Duration) {
-	apiCacheStore.Lock()
-	defer apiCacheStore.Unlock()
-	apiCacheStore.m[key] = apiCacheEntry{
+	entry := apiCacheEntry{
 		status:  status,
 		header:  header.Clone(),
-		body:    body,
+		body:    append([]byte(nil), body...),
 		expires: time.Now().Add(ttl),
 	}
+	apiCacheStore.Lock()
+	apiCacheStore.m[key] = entry
+	apiCacheStore.Unlock()
+
+	path, err := apiCachePath(key)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return
+	}
+	data, err := json.Marshal(apiCacheFile{
+		Status:  entry.status,
+		Header:  entry.header,
+		Body:    entry.body,
+		Expires: entry.expires,
+	})
+	if err != nil {
+		return
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".api-cache-")
+	if err != nil {
+		return
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		return
+	}
+	_ = os.Rename(tmpName, path)
+}
+
+func apiCachePath(key string) (string, error) {
+	root := os.Getenv("BITBUCKET_CACHE_DIR")
+	if root == "" {
+		var err error
+		root, err = os.UserCacheDir()
+		if err != nil {
+			return "", err
+		}
+	}
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(key)))
+	return filepath.Join(root, "bitbucket-cli", "api", hash+".json"), nil
 }

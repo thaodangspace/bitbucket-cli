@@ -24,6 +24,7 @@ func runStdin(t *testing.T, transport roundTripFunc, stdin string, args ...strin
 	t.Setenv("BITBUCKET_DEFAULT_WORKSPACE", "team")
 	t.Setenv("BITBUCKET_DEFAULT_REPO", "repo")
 	t.Setenv("BITBUCKET_CONFIG", t.TempDir()+"/bitbucket-cli.yaml")
+	t.Setenv("BITBUCKET_CACHE_DIR", t.TempDir())
 	auth.SetGlobalStore(auth.NewMemoryStore())
 	t.Cleanup(func() { auth.SetGlobalStore(nil) })
 
@@ -36,6 +37,7 @@ func runStdin(t *testing.T, transport roundTripFunc, stdin string, args ...strin
 	apiHeaders, apiRawField, apiField = nil, nil, nil
 	apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""
 	apiPaginate, apiSlurp, apiInclude, apiSilent = false, false, false, false
+	apiMaxPages = bitbucket.DefaultMaxPages
 	apiCacheStore.m = map[string]apiCacheEntry{}
 	testTransport = transport
 	t.Cleanup(func() { testTransport = nil })
@@ -158,6 +160,18 @@ func TestAPIRawFieldAlwaysString(t *testing.T) {
 	}
 }
 
+func TestAPIFieldShapeConflicts(t *testing.T) {
+	for _, fields := range [][]string{
+		{"-F", "a=1", "-F", "a[b]=2"},
+		{"-F", "a[b]=1", "-F", "a[]=2"},
+	} {
+		_, err := run(t, nil, append([]string{"api", "/x", "-X", "POST"}, fields...)...)
+		if err == nil || !strings.Contains(err.Error(), "field shape conflict") {
+			t.Fatalf("expected field shape conflict for %v, got %v", fields, err)
+		}
+	}
+}
+
 func TestAPIInputFileRawBody(t *testing.T) {
 	dir := t.TempDir()
 	inputPath := dir + "/body.json"
@@ -274,6 +288,30 @@ func TestAPISilent(t *testing.T) {
 	}
 }
 
+func TestAPIIncludeSilentKeepsHeaders(t *testing.T) {
+	out, err := run(t, func(r *http.Request) (*http.Response, error) {
+		return jsonResp(200, `{"ok":true}`), nil
+	}, "api", "/user", "--include", "--silent")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(out, "HTTP/1.1 200 OK\n") || !strings.HasSuffix(out, "\n\n") {
+		t.Fatalf("expected headers without body, got %q", out)
+	}
+}
+
+func TestAPIPaginateIncludeSilentKeepsHeaders(t *testing.T) {
+	out, err := run(t, func(r *http.Request) (*http.Response, error) {
+		return jsonResp(200, `{"values":[],"next":""}`), nil
+	}, "api", "/user", "--paginate", "--include", "--silent")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(out, "HTTP/1.1 200 OK\n") || !strings.HasSuffix(out, "\n\n") {
+		t.Fatalf("expected paginated headers without body, got %q", out)
+	}
+}
+
 func TestAPIOutputFileBinary(t *testing.T) {
 	dir := t.TempDir()
 	outPath := dir + "/out.diff"
@@ -365,6 +403,24 @@ func TestAPIPaginationWithoutSlurpJQPerItem(t *testing.T) {
 	}
 }
 
+func TestAPIPaginationMaxPages(t *testing.T) {
+	requests := 0
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		requests++
+		next := "https://api.bitbucket.org/2.0/user?page=1"
+		if requests > 1 {
+			next = "https://api.bitbucket.org/2.0/user?page=2"
+		}
+		return jsonResp(200, `{"values":[],"next":"`+next+`"}`), nil
+	}, "api", "/user", "--paginate", "--max-pages", "2")
+	if err == nil || !strings.Contains(err.Error(), "maximum of 2 pages") {
+		t.Fatalf("expected max-pages error, requests=%d err=%v", requests, err)
+	}
+	if requests != 2 {
+		t.Fatalf("expected 2 requests, got %d", requests)
+	}
+}
+
 func TestAPIPaginationLoopDetected(t *testing.T) {
 	_, err := run(t, func(r *http.Request) (*http.Response, error) {
 		return jsonResp(200, `{"values":[],"next":"https://api.bitbucket.org/2.0/user?page=2"}`), nil
@@ -434,6 +490,7 @@ func TestAPICancellation(t *testing.T) {
 	apiHeaders, apiRawField, apiField = nil, nil, nil
 	apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""
 	apiPaginate, apiSlurp, apiInclude, apiSilent = false, false, false, false
+	apiMaxPages = bitbucket.DefaultMaxPages
 
 	done := make(chan error, 1)
 	rootCmd.SetArgs([]string{"api", "/user"})
@@ -467,6 +524,7 @@ func TestAPICacheHitsSecondRequest(t *testing.T) {
 	t.Setenv("BITBUCKET_DEFAULT_WORKSPACE", "team")
 	t.Setenv("BITBUCKET_DEFAULT_REPO", "repo")
 	t.Setenv("BITBUCKET_CONFIG", t.TempDir()+"/bitbucket-cli.yaml")
+	t.Setenv("BITBUCKET_CACHE_DIR", t.TempDir())
 	auth.SetGlobalStore(auth.NewMemoryStore())
 	t.Cleanup(func() { auth.SetGlobalStore(nil) })
 
@@ -478,11 +536,17 @@ func TestAPICacheHitsSecondRequest(t *testing.T) {
 	t.Cleanup(func() { testTransport = nil })
 
 	for i := 0; i < 2; i++ {
+		if i == 1 {
+			apiCacheStore.Lock()
+			apiCacheStore.m = map[string]apiCacheEntry{}
+			apiCacheStore.Unlock()
+		}
 		resetFlags(rootCmd)
 		apiMethod = ""
 		apiHeaders, apiRawField, apiField = nil, nil, nil
 		apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""
 		apiPaginate, apiSlurp, apiInclude, apiSilent = false, false, false, false
+		apiMaxPages = bitbucket.DefaultMaxPages
 		rootCmd.SetArgs([]string{"api", "/user", "--cache", "5m"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("unexpected error: %v", err)

@@ -108,7 +108,7 @@ Flags:
 - `--input FILE|-` — send a raw request body from a file or stdin.
 - `--paginate` — follow Bitbucket `next` links and emit each JSON page.
   `--slurp` wraps all pages in an array; `--jq`/`--template` apply per page
-  unless `--slurp` is set.
+  unless `--slurp` is set. `--max-pages N` bounds traversal; `0` is unlimited.
 - `-i, --include` — print the response status and headers before the body.
 - `--silent` — discard the response body.
 - `-o, --output FILE` — write the raw response body to a file (no excerpt
@@ -116,7 +116,8 @@ Flags:
 - `-q, --jq EXPR` — filter JSON output (subset: `.a.b`, `.[<n>]`, `.[]`, `|`).
 - `-t, --template EXPR` — format JSON output with a Go template (`json` and
   `pretty` helpers are provided).
-- `--cache DURATION` — cache GET responses in memory (e.g. `30s`, `2m`).
+- `--cache DURATION` — persist GET responses in the user cache for the given
+  duration (e.g. `30s`, `2m`). Cache entries are restricted to the current user.
 
 Endpoint resolution accepts relative paths such as
 `/repositories/{workspace}/{repo}/pullrequests` (placeholders expand from the

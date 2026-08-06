@@ -370,6 +370,21 @@ func TestDoAppendsQuery(t *testing.T) {
 	}
 }
 
+func TestDoAllowsURLValuedRelativeQuery(t *testing.T) {
+	var gotURL string
+	c := testClient(func(r *http.Request) (*http.Response, error) {
+		gotURL = r.URL.String()
+		return jsonResponse(200, `{}`), nil
+	})
+	_, err := c.Do(context.Background(), "/x?redirect=https://example.com", RequestOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotURL != "https://api.bitbucket.org/2.0/x?redirect=https://example.com" {
+		t.Fatalf("unexpected url: %s", gotURL)
+	}
+}
+
 func TestPaginateDetectsLoop(t *testing.T) {
 	c := testClient(func(r *http.Request) (*http.Response, error) {
 		return jsonResponse(200, `{"values":[{"id":1}],"next":"https://api.bitbucket.org/2.0/loop"}`), nil
