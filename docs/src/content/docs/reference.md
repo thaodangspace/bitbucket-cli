@@ -216,15 +216,38 @@ Upload files and link them from a pull request comment
 
 Flags: `--file` — Local file to upload (repeatable, required); `--message` — Optional markdown text before the attachment links
 
-## `pr comment <id>`
+## `pr comment [<id>]`
 
-Post a markdown comment on a pull request
+Create or manage pull request comments
 
 - Classification: **write**
 - Required scopes: `read:pullrequest:bitbucket`
-- Example: `bitbucket-cli pr comment <id>`
+- Example: `bitbucket-cli pr comment [<id>]`
+- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
 
-Flags: `--body` — Markdown comment body to post (required); `--reply-to` — Parent comment ID to reply to
+Flags: `--body-file` — Read the comment body from a file (- for stdin); `--body` — Markdown comment body; `--from` — Positive old-side file line number for an inline comment; `--path` — File path for an inline comment; `--pending` — Send Bitbucket's pending=true comment field; this creates no local draft and may be rejected by unsupported workflows; `--reply-to` — Parent comment ID to reply to; `--to` — Positive new-side file line number for an inline comment
+
+## `pr comment delete <pr> <comment-id>`
+
+Delete a pull request comment
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr comment delete <pr> <comment-id>`
+- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
+
+Flags: `--yes` — Confirm deletion
+
+## `pr comment edit <pr> <comment-id>`
+
+Edit a pull request comment
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr comment edit <pr> <comment-id>`
+- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
+
+Flags: `--body-file` — Read the replacement body from a file (- for stdin); `--body` — Replacement markdown body
 
 ## `pr comments <id>`
 
@@ -233,6 +256,7 @@ List comments on a pull request
 - Classification: **write**
 - Required scopes: `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comments <id>`
+- JSON fields: `id,content,user,parent,inline,pending,resolved,created_on,updated_on`
 
 Flags: `--limit` — Maximum comments to return
 
@@ -277,6 +301,105 @@ List pull requests for a repository
 - JSON fields: `id,title,state,author,source,destination,reviewers`
 
 Flags: `--author` — Filter by author account ID (e.g. from the Bitbucket profile URL); `--limit` — Maximum pull requests to return; `--mine` — Filter to pull requests authored by the authenticated user; `--state` — Filter by state: OPEN, MERGED, DECLINED, or SUPERSEDED
+
+## `pr remove-change-request [<id>]`
+
+Remove your change request from a pull request
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr remove-change-request [<id>]`
+
+## `pr review [<id>]`
+
+Approve, request changes, or comment on a pull request
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr review [<id>]`
+
+Flags: `--approve` — Approve the pull request; `--body-file` — Read the review/comment body from a file (- for stdin); `--body` — Review/comment body; `--comment` — Post a review comment without approving or requesting changes; `--request-changes` — Request changes (requires a non-empty review body)
+
+## `pr task`
+
+Manage pull request tasks
+
+- Classification: **read**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr task`
+
+## `pr task create <pr>`
+
+Create a pull request task
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr task create <pr>`
+
+Flags: `--body-file` — Read task body from a file (- for stdin); `--body` — Task body; `--comment` — Associate the task with a comment ID
+
+## `pr task delete <pr> <task-id>`
+
+Delete a pull request task
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr task delete <pr> <task-id>`
+
+Flags: `--yes` — Confirm deletion
+
+## `pr task list <pr>`
+
+List pull request tasks
+
+- Classification: **read**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr task list <pr>`
+- JSON fields: `id,content,state,comment,user,created_on,updated_on`
+
+Flags: `--limit` — Maximum tasks to return; `--state` — Filter by task state: OPEN or RESOLVED
+
+## `pr task update <pr> <task-id>`
+
+Update a pull request task
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr task update <pr> <task-id>`
+
+Flags: `--body-file` — Read replacement task body from a file (- for stdin); `--body` — Replacement task body; `--state` — Task state: OPEN or RESOLVED
+
+## `pr thread`
+
+Resolve or reopen pull request comment threads
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr thread`
+
+## `pr thread reopen <pr> <comment-id>`
+
+Reopen a pull request comment thread
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr thread reopen <pr> <comment-id>`
+
+## `pr thread resolve <pr> <comment-id>`
+
+Resolve a pull request comment thread
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr thread resolve <pr> <comment-id>`
+
+## `pr unapprove [<id>]`
+
+Remove your approval from a pull request
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr unapprove [<id>]`
 
 ## `pr update <id>`
 

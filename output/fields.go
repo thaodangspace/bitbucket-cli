@@ -158,7 +158,8 @@ func fields(names ...string) FieldSet {
 // explicit so selecting reviewers.display_name cannot leak other fields.
 var (
 	PullRequestFields = fields("author", "author.display_name", "close_source_branch", "comment_count", "created_on", "description", "destination", "destination.branch", "destination.branch.name", "id", "links", "merge_commit", "reviewers", "reviewers.display_name", "reviewers.nickname", "source", "source.branch", "source.branch.name", "state", "task_count", "title", "updated_on")
-	CommentFields     = fields("content", "content.raw", "created_on", "deleted", "id", "links", "parent", "parent.id", "updated_on", "user", "user.display_name")
+	CommentFields     = fields("content", "content.raw", "created_on", "deleted", "id", "inline", "inline.from", "inline.path", "inline.to", "links", "parent", "parent.id", "pending", "resolved", "updated_on", "user", "user.display_name")
+	TaskFields        = fields("comment", "comment.id", "content", "content.raw", "created_on", "id", "links", "state", "updated_on", "user", "user.display_name")
 	CommitFields      = fields("author", "author.display_name", "date", "hash", "links", "message", "repository")
 	BranchFields      = fields("links", "merge_strategies", "name", "target", "target.hash", "target.author", "type")
 	PipelineFields    = fields("build_number", "completed_on", "created_on", "creator", "creator.display_name", "duration_in_seconds", "links", "repository", "state", "state.name", "state.result", "state.result.name", "steps", "steps.name", "steps.state", "target", "target.ref_name", "target.commit", "target.commit.hash", "trigger", "trigger.name", "uuid")

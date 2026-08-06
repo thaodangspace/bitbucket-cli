@@ -65,7 +65,19 @@ on the same request.
 These commands modify Bitbucket and should run only when explicitly requested:
 
 ```sh
-bitbucket-cli pr comment <id> --body "Markdown comment" [--reply-to <comment-id>]
+bitbucket-cli pr comment [<id>] --body "Markdown comment" [--reply-to <comment-id>]
+bitbucket-cli pr comment [<id>] --body "Fix this line" --path path/to/file.go --to 42
+bitbucket-cli pr review [<id>] --approve [--body "Looks good"]
+bitbucket-cli pr review [<id>] --request-changes --body-file review.md
+bitbucket-cli pr review [<id>] --comment --body "Please clarify"
+bitbucket-cli pr unapprove [<id>]
+bitbucket-cli pr remove-change-request [<id>]
+bitbucket-cli pr thread resolve <id> <comment-id>
+bitbucket-cli pr thread reopen <id> <comment-id>
+bitbucket-cli pr task list <id> [--state OPEN|RESOLVED]
+bitbucket-cli pr task create <id> --body "Add a test"
+bitbucket-cli pr task update <id> <task-id> [--body TEXT] [--state OPEN|RESOLVED]
+bitbucket-cli pr task delete <id> <task-id> --yes
 bitbucket-cli pr create --source BRANCH --title "Title" [options]
 bitbucket-cli pr update <id> [--title TITLE] [--description TEXT|--description-file FILE]
 bitbucket-cli pr attach <id> --file PATH [--file PATH ...] [--message TEXT]
@@ -78,9 +90,18 @@ native pull-request attachment API: `pr attach` uploads files to repository
 Downloads, then posts links in a pull request comment. Duplicate filenames in
 one invocation are rejected.
 
+Review bodies are ordinary PR comments posted before the participant action;
+Bitbucket does not make that sequence atomic. If approval or a change request
+fails after the comment succeeds, the error includes the created comment ID.
+Inline comments use Bitbucket's old/new file line numbers (`--from` and
+`--to`); unified-diff positions are not translated. Comment and task deletes
+require `--yes`, and task updates preserve fields that were not specified.
+
 :::danger[Write safety]
-Do not run `pr comment`, `pr create`, `pr update`, or `pr attach` unless the user
-explicitly asked for the remote change.
+Do not run `pr comment`, `pr review`, `pr unapprove`,
+`pr remove-change-request`, `pr thread`, `pr task create/update/delete`,
+`pr create`, `pr update`, or `pr attach` unless the user explicitly asked for the
+remote change.
 :::
 
 ## Branches and pipelines

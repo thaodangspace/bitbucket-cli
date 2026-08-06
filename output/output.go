@@ -57,11 +57,12 @@ type errorEnvelope struct {
 }
 
 type errorBody struct {
-	Message string `json:"message"`
-	Status  int    `json:"status,omitempty"`
-	Method  string `json:"method,omitempty"`
-	URL     string `json:"url,omitempty"`
-	Excerpt string `json:"excerpt,omitempty"`
+	Message string         `json:"message"`
+	Status  int            `json:"status,omitempty"`
+	Method  string         `json:"method,omitempty"`
+	URL     string         `json:"url,omitempty"`
+	Excerpt string         `json:"excerpt,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // WriteError renders err as a JSON envelope to w. HTTP errors include their
@@ -75,6 +76,9 @@ func WriteError(w io.Writer, err error) {
 		body.Method = he.Method
 		body.URL = he.URL
 		body.Excerpt = he.Excerpt
+	}
+	if detailed, ok := err.(interface{ Details() map[string]any }); ok {
+		body.Details = detailed.Details()
 	}
 
 	enc := json.NewEncoder(w)
