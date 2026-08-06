@@ -19,6 +19,9 @@ func (e *Error) Error() string { return fmt.Sprintf("invalid %s selector %q", e.
 type PullRequestSelector struct {
 	Repository *Repository
 	ID         int
+	// Branch is a source branch selector that must be resolved against the
+	// repository's pull requests before an API request can be made.
+	Branch string
 }
 
 // PipelineSelector distinguishes UUIDs from numeric build numbers and retains

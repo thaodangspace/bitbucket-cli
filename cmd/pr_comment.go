@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 
@@ -73,44 +72,7 @@ func newPRContext(selectedRepo *selector.PullRequestSelector) (repoContext, erro
 // selectPRContext supports the optional selector form used by review and
 // comment commands by resolving the current git branch when omitted.
 func selectPRContext(cmd *cobra.Command, args []string) (selector.PullRequestSelector, repoContext, error) {
-	if len(args) == 1 {
-		selected, err := parsePullRequestSelector(args[0])
-		if err != nil {
-			return selector.PullRequestSelector{}, repoContext{}, err
-		}
-		prctx, err := newPRContext(&selected)
-		return selected, prctx, err
-	}
-	cfg, client, err := newClient()
-	if err != nil {
-		return selector.PullRequestSelector{}, repoContext{}, err
-	}
-	ref, base, err := resolveRepo(cfg)
-	if err != nil {
-		return selector.PullRequestSelector{}, repoContext{}, err
-	}
-	branch, err := currentGitBranch()
-	if err != nil {
-		return selector.PullRequestSelector{}, repoContext{}, err
-	}
-	q := url.Values{"q": {fmt.Sprintf("source.branch.name=%q", branch)}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
-	values, err := client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, q.Encode()), 1, bitbucket.DefaultMaxPages)
-	if err != nil {
-		return selector.PullRequestSelector{}, repoContext{}, err
-	}
-	if len(values) == 0 {
-		return selector.PullRequestSelector{}, repoContext{}, fmt.Errorf("no pull request found for current branch %q", branch)
-	}
-	var item map[string]any
-	if err := json.Unmarshal(values[0], &item); err != nil {
-		return selector.PullRequestSelector{}, repoContext{}, err
-	}
-	id, ok := item["id"].(float64)
-	if !ok || id <= 0 {
-		return selector.PullRequestSelector{}, repoContext{}, fmt.Errorf("current branch pull request has no valid ID")
-	}
-	repo := selector.Repository{Workspace: ref.Workspace, Repo: ref.RepoSlug}
-	return selector.PullRequestSelector{Repository: &repo, ID: int(id)}, repoContext{client: client, base: base}, nil
+	return resolvePRContext(cmd, args)
 }
 
 func init() {

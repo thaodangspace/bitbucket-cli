@@ -39,13 +39,18 @@ const excerptLimit = 500
 // does not expose a universal scope-introspection endpoint, so this is a
 // conservative, command-family-level registry rather than an exact claim.
 func RequiredScopes(path string) string {
+	return RequiredScopesFor(http.MethodGet, path)
+}
+
+// RequiredScopesFor returns the documented token scopes for an HTTP operation.
+func RequiredScopesFor(method, path string) string {
 	switch {
 	case strings.Contains(path, "/downloads"):
 		return "write:repository:bitbucket"
-	case strings.Contains(path, "/pullrequests/"):
-		return "write:pullrequest:bitbucket"
+	case strings.Contains(path, "/pullrequests") && method != http.MethodGet:
+		return "read:pullrequest:bitbucket and write:pullrequest:bitbucket"
 	case strings.Contains(path, "/pullrequests"):
-		return "pullrequest:write or pullrequest:read"
+		return "read:pullrequest:bitbucket"
 	case strings.Contains(path, "/refs/branches"), strings.Contains(path, "/commits"):
 		return "repository:read"
 	case strings.Contains(path, "/pipeline"):
@@ -69,7 +74,7 @@ func (e *HTTPError) Error() string {
 	case http.StatusUnauthorized:
 		return "Bitbucket authentication failed. Run `bitbucket-cli auth login` or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN."
 	case http.StatusForbidden:
-		return fmt.Sprintf("Bitbucket authorization failed. The endpoint requires the %s scope; check the token's granted scopes.", RequiredScopes(e.URL))
+		return fmt.Sprintf("Bitbucket authorization failed. The endpoint requires the %s scope; check the token's granted scopes.", RequiredScopesFor(e.Method, e.URL))
 	case http.StatusNotFound:
 		return "Bitbucket resource not found. Check workspace, repo, and IDs."
 	case http.StatusTooManyRequests:
@@ -120,6 +125,9 @@ func NewClient(a auth.Provider, opts ...Option) *Client {
 	c := &Client{auth: a, http: &httpClient}
 	for _, opt := range opts {
 		opt(c)
+	}
+	if c.http.CheckRedirect == nil {
+		c.http.CheckRedirect = safeRedirect
 	}
 	if c.auth == nil {
 		// No provider configured: an API token requires an email, so fall
@@ -343,6 +351,13 @@ func retryAfterDelay(value string) time.Duration {
 type UploadFile struct {
 	Path string
 	Name string
+}
+
+func safeRedirect(req *http.Request, _ []*http.Request) error {
+	if req.URL.Scheme != "https" || (strings.ToLower(req.URL.Hostname()) != "api.bitbucket.org" && strings.ToLower(req.URL.Hostname()) != "bitbucket.org") || req.URL.Port() != "" || req.URL.User != nil {
+		return fmt.Errorf("refusing redirect to non-Bitbucket host %q", req.URL.String())
+	}
+	return nil
 }
 
 func buildURL(pathOrURL string) (string, error) {
