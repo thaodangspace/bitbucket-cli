@@ -15,8 +15,23 @@ type Error struct{ Kind, Value string }
 
 func (e *Error) Error() string { return fmt.Sprintf("invalid %s selector %q", e.Kind, e.Value) }
 
-// RepositorySelector accepts workspace/repo, Bitbucket web URLs, and API
-// repository URLs. An empty value means that the caller should use git remote.
+// PullRequestSelector retains repository context when a URL supplies it.
+type PullRequestSelector struct {
+	Repository *Repository
+	ID         int
+}
+
+// PipelineSelector distinguishes UUIDs from numeric build numbers and retains
+// repository context from URLs.
+type PipelineSelector struct {
+	Repository  *Repository
+	UUID        string
+	BuildNumber *int
+}
+
+// RepositorySelector accepts workspace/repo, Bitbucket web/API URLs, and an
+// explicit repository reference. An empty value is invalid; callers use their
+// git-remote fallback before calling this function.
 func RepositorySelector(value string) (Repository, error) {
 	raw := strings.TrimSpace(value)
 	if raw == "" {
@@ -61,46 +76,81 @@ func splitPath(path string) []string {
 	return out
 }
 
-// PullRequest accepts a positive numeric ID or a Bitbucket pull request URL.
-func PullRequest(value string) (int, error) {
+// PullRequest accepts an ID or a Bitbucket pull request URL.
+func PullRequest(value string) (PullRequestSelector, error) {
 	raw := strings.TrimSpace(value)
 	if id, err := strconv.Atoi(raw); err == nil && id > 0 {
-		return id, nil
+		return PullRequestSelector{ID: id}, nil
 	}
-	if u, err := url.Parse(raw); err == nil && strings.EqualFold(u.Hostname(), "bitbucket.org") {
+	if u, err := url.Parse(raw); err == nil && (strings.EqualFold(u.Hostname(), "bitbucket.org") || strings.EqualFold(u.Hostname(), "api.bitbucket.org")) {
 		parts := splitPath(u.Path)
+		if len(parts) >= 4 && parts[0] == "2.0" && parts[1] == "repositories" {
+			parts = parts[2:]
+		}
 		for i := range parts {
 			if parts[i] == "pull-requests" && i+1 < len(parts) {
-				if id, err := strconv.Atoi(parts[i+1]); err == nil && id > 0 {
-					return id, nil
+				if id, err := strconv.Atoi(parts[i+1]); err == nil && id > 0 && i >= 2 {
+					repo, rerr := validRepository(parts[0], parts[1], raw)
+					if rerr != nil {
+						return PullRequestSelector{}, rerr
+					}
+					return PullRequestSelector{Repository: &repo, ID: id}, nil
 				}
 			}
 		}
 	}
-	return 0, &Error{"pull request", value}
+	return PullRequestSelector{}, &Error{"pull request", value}
 }
 
 var pipelineUUID = regexp.MustCompile(`^[{]?[0-9a-fA-F-]{8,}[}]?$`)
+var integer = regexp.MustCompile(`^\d+$`)
 
-// Pipeline accepts a UUID-like selector, a numeric build number, or a URL.
-// The caller resolves ambiguous build numbers against the repository API.
-func Pipeline(value string) (string, error) {
+// Pipeline accepts a UUID-like selector, a numeric build number, an opaque
+// identifier, or a Bitbucket pipeline URL.
+func Pipeline(value string) (PipelineSelector, error) {
 	raw := strings.TrimSpace(value)
 	if raw == "" {
-		return "", &Error{"pipeline", value}
+		return PipelineSelector{}, &Error{"pipeline", value}
 	}
-	if pipelineUUID.MatchString(raw) || regexp.MustCompile(`^\d+$`).MatchString(raw) || !strings.ContainsAny(raw, "/?#") {
-		// Bitbucket installations and test fixtures may use opaque pipeline
-		// identifiers; preserve those for backwards compatibility.
-		return raw, nil
-	}
-	if u, err := url.Parse(raw); err == nil && strings.EqualFold(u.Hostname(), "bitbucket.org") {
+	if u, err := url.Parse(raw); err == nil && (strings.EqualFold(u.Hostname(), "bitbucket.org") || strings.EqualFold(u.Hostname(), "api.bitbucket.org")) {
 		parts := splitPath(u.Path)
+		if len(parts) >= 4 && parts[0] == "2.0" && parts[1] == "repositories" {
+			parts = parts[2:]
+		}
+		if len(parts) >= 2 && strings.HasPrefix(u.Fragment, "!/results/") {
+			repo, rerr := validRepository(parts[0], parts[1], raw)
+			if rerr != nil {
+				return PipelineSelector{}, rerr
+			}
+			id := strings.TrimPrefix(u.Fragment, "!/results/")
+			if id != "" {
+				return PipelineSelector{Repository: &repo, UUID: id}, nil
+			}
+		}
 		for i, part := range parts {
 			if part == "pipelines" && i+1 < len(parts) {
-				return parts[i+1], nil
+				if i < 2 {
+					return PipelineSelector{}, &Error{"pipeline", value}
+				}
+				repo, rerr := validRepository(parts[0], parts[1], raw)
+				if rerr != nil {
+					return PipelineSelector{}, rerr
+				}
+				id := parts[i+1]
+				if integer.MatchString(id) {
+					n, _ := strconv.Atoi(id)
+					return PipelineSelector{Repository: &repo, BuildNumber: &n}, nil
+				}
+				return PipelineSelector{Repository: &repo, UUID: id}, nil
 			}
 		}
 	}
-	return "", &Error{"pipeline", value}
+	if integer.MatchString(raw) {
+		n, _ := strconv.Atoi(raw)
+		return PipelineSelector{BuildNumber: &n}, nil
+	}
+	if pipelineUUID.MatchString(raw) || !strings.ContainsAny(raw, "/?#") {
+		return PipelineSelector{UUID: raw}, nil
+	}
+	return PipelineSelector{}, &Error{"pipeline", value}
 }

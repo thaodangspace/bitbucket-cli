@@ -121,9 +121,9 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 | `config get <key>` | Print a stored config value |
 | `config list` | Show stored config (API token redacted) |
 | `config path` | Print the config file path |
-| `repo get` | Repository details |
+| `repo get [--web]` | Repository details |
 | `pr list [--state OPEN\|MERGED\|DECLINED\|SUPERSEDED] [--limit N]` | List pull requests |
-| `pr get <id>` | One pull request |
+| `pr get [<id-or-url>] [--web]` | One pull request |
 | `pr comments <id> [--limit N]` | Pull request comments |
 | `pr commits <id> [--limit N]` | Pull request commits |
 | `pr comment <id> --body <markdown> [--reply-to <comment-id>]` | Post a markdown comment or reply (write) |
@@ -132,14 +132,14 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 | `pr update <id> [--title <t>] [--description ...]` | Update a PR's title/description (write) |
 | `branch list [--query <q>] [--limit N]` | List branches |
 | `pipeline list [--state <state>] [--limit N]` | List pipeline runs |
-| `pipeline get <uuid>` | Pipeline details and steps |
+| `pipeline get <uuid> [--web]` | Pipeline details and steps |
 | `browse [<path>]` | Open the repository in a browser |
 | `completion bash\|zsh\|fish\|powershell` | Generate shell completion |
 | `alias set\|delete\|list` | Manage local command aliases |
 
 Global flags: `--workspace`, `--repo`, `-R/--repository`, `--pretty`, `--json`,
 `--jq`, `--template`, `--format json|table|yaml|raw`, `--color`, and `--pager`.
-Default `--limit` is 20.
+`--jq` uses the maintained gojq implementation. Default `--limit` is 20.
 
 ## Examples
 

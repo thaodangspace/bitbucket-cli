@@ -58,6 +58,108 @@ func saveAliases(aliases map[string]string) error {
 	return os.WriteFile(path, data, 0o600)
 }
 
+func expandAliasArgs(args []string) ([]string, error) {
+	aliases, err := loadAliases()
+	if err != nil {
+		return nil, err
+	}
+	for depth := 0; depth < 10; depth++ {
+		index := firstCommandIndex(args)
+		if index < 0 || index >= len(args) {
+			return args, nil
+		}
+		name := args[index]
+		if isBuiltinCommand(name) {
+			return args, nil
+		}
+		value, ok := aliases[name]
+		if !ok {
+			return args, nil
+		}
+		parts, err := splitAliasCommand(value)
+		if err != nil {
+			return nil, fmt.Errorf("parse alias %q: %w", name, err)
+		}
+		args = append(append(append([]string{}, args[:index]...), parts...), args[index+1:]...)
+	}
+	return nil, fmt.Errorf("alias expansion exceeded 10 levels (possible cycle)")
+}
+
+func firstCommandIndex(args []string) int {
+	valueFlags := map[string]bool{"--workspace": true, "--repo": true, "--repository": true, "--json": true, "--jq": true, "--template": true, "--format": true, "--color": true, "--pager": true}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			return i + 1
+		}
+		if strings.HasPrefix(arg, "-") {
+			if !strings.Contains(arg, "=") && valueFlags[arg] {
+				i++
+			}
+			continue
+		}
+		return i
+	}
+	return -1
+}
+
+func isBuiltinCommand(name string) bool {
+	for _, command := range rootCmd.Commands() {
+		if command.Name() == name || command.HasAlias(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func splitAliasCommand(value string) ([]string, error) {
+	var parts []string
+	var current strings.Builder
+	var quote rune
+	escaped := false
+	for _, r := range value {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' && quote != '\'' {
+			escaped = true
+			continue
+		}
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+			} else {
+				current.WriteRune(r)
+			}
+			continue
+		}
+		if r == '\'' || r == '"' {
+			quote = r
+			continue
+		}
+		if r == ' ' || r == '\t' || r == '\n' {
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if escaped || quote != 0 {
+		return nil, fmt.Errorf("unterminated quote or escape")
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("alias command is empty")
+	}
+	return parts, nil
+}
+
 func init() {
 	aliasCmd := &cobra.Command{Use: "alias", Short: "Manage command aliases"}
 	setCmd := &cobra.Command{

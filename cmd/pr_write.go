@@ -55,10 +55,11 @@ func init() {
 			"update the pull request. Existing reviewers are preserved.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
+			selected, err := parsePullRequestSelector(args[0])
 			if err != nil {
 				return fail(err)
 			}
+			id := selected.ID
 			desc, descProvided, err := readBody(updDesc, updDescF, os.Stdin)
 			if err != nil {
 				return fail(err)
@@ -72,7 +73,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			_, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}

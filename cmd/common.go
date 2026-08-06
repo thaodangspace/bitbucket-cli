@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"text/template"
@@ -58,6 +60,22 @@ func newClient() (config.Config, *bitbucket.Client, error) {
 // resolveRepo turns the persistent --workspace/--repo flags plus config
 // defaults into a concrete repo reference and its API base path.
 func resolveRepo(cfg config.Config) (config.ResolvedRepoRef, string, error) {
+	return resolveRepoFor(cfg, nil)
+}
+
+func resolveRepoFor(cfg config.Config, selected *selector.Repository) (config.ResolvedRepoRef, string, error) {
+	if selected != nil {
+		if strings.TrimSpace(flagRepository) != "" || strings.TrimSpace(flagWorkspace) != "" || strings.TrimSpace(flagRepo) != "" {
+			ref, _, err := resolveRepo(cfg)
+			if err != nil {
+				return config.ResolvedRepoRef{}, "", err
+			}
+			if ref.Workspace != selected.Workspace || ref.RepoSlug != selected.Repo {
+				return config.ResolvedRepoRef{}, "", fmt.Errorf("resource URL targets %s/%s, which conflicts with the selected repository %s/%s", selected.Workspace, selected.Repo, ref.Workspace, ref.RepoSlug)
+			}
+		}
+		return config.ResolvedRepoRef{Workspace: selected.Workspace, RepoSlug: selected.Repo}, fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(selected.Workspace), bitbucket.EncodePathSegment(selected.Repo)), nil
+	}
 	if strings.TrimSpace(flagRepository) != "" {
 		if strings.TrimSpace(flagWorkspace) != "" || strings.TrimSpace(flagRepo) != "" {
 			return config.ResolvedRepoRef{}, "", fmt.Errorf("--repository cannot be combined with --workspace or --repo")
@@ -66,9 +84,7 @@ func resolveRepo(cfg config.Config) (config.ResolvedRepoRef, string, error) {
 		if err != nil {
 			return config.ResolvedRepoRef{}, "", err
 		}
-		return ref, fmt.Sprintf("/repositories/%s/%s",
-			bitbucket.EncodePathSegment(ref.Workspace),
-			bitbucket.EncodePathSegment(ref.RepoSlug)), nil
+		return ref, fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.RepoSlug)), nil
 	}
 	ref, err := config.ResolveRepoRef(config.RepoRef{Workspace: flagWorkspace, RepoSlug: flagRepo}, cfg)
 	if err != nil {
@@ -101,10 +117,31 @@ func parseRepositorySelector(value string) (config.ResolvedRepoRef, error) {
 }
 
 func parseID(arg string) (int, error) {
-	if id, err := selector.PullRequest(arg); err == nil {
-		return id, nil
+	selected, err := selector.PullRequest(arg)
+	if err == nil {
+		return selected.ID, nil
 	}
 	return parsePositiveID("pull request id", arg)
+}
+
+func parsePullRequestSelector(arg string) (selector.PullRequestSelector, error) {
+	selected, err := selector.PullRequest(arg)
+	if err != nil {
+		return selector.PullRequestSelector{}, err
+	}
+	return selected, nil
+}
+
+func currentGitBranch() (string, error) {
+	out, err := exec.Command("git", "branch", "--show-current").Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve current git branch: %w", err)
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "" {
+		return "", fmt.Errorf("could not determine current git branch")
+	}
+	return branch, nil
 }
 
 func parsePositiveID(label, arg string) (int, error) {
@@ -153,57 +190,102 @@ func renderValue(value any, fields output.FieldSet, summary func(map[string]any)
 		return fmt.Errorf("--json is not supported for this command")
 	}
 	if flagJSON != "" {
-		requested := splitFields(flagJSON)
-		projected, err := fields.Project(value, requested)
+		projected, err := fields.Project(value, splitFields(flagJSON))
 		if err != nil {
 			return err
 		}
 		value = projected
 	}
-
-	if flagJQ != "" && flagTemplate != "" {
-		return fmt.Errorf("--jq and --template are mutually exclusive")
-	}
-	if flagJQ != "" {
-		return emitJQValue(value, flagJQ)
-	}
-	if flagTemplate != "" {
-		return emitTemplateValue(value, flagTemplate)
-	}
-
 	mode, err := outputMode()
 	if err != nil {
 		return err
 	}
-	switch mode {
-	case "table":
-		if list {
-			items, _ := value.([]any)
-			lines := make([]string, 0, len(items))
-			for _, item := range items {
-				m, ok := item.(map[string]any)
-				if !ok {
-					return fmt.Errorf("table output requires object values")
+	var buf bytes.Buffer
+	if flagJQ != "" {
+		if err := emitJQValueTo(&buf, value, flagJQ); err != nil {
+			return err
+		}
+	} else if flagTemplate != "" {
+		if err := emitTemplateValueTo(&buf, value, flagTemplate); err != nil {
+			return err
+		}
+	} else {
+		switch mode {
+		case "table":
+			if list {
+				items, _ := value.([]any)
+				lines := make([]string, 0, len(items))
+				for _, item := range items {
+					m, ok := item.(map[string]any)
+					if !ok {
+						return fmt.Errorf("table output requires object values")
+					}
+					lines = append(lines, summary(m))
 				}
-				lines = append(lines, summary(m))
+				if err := output.RenderLines(&buf, lines, emptyMsg); err != nil {
+					return err
+				}
+			} else {
+				m, ok := value.(map[string]any)
+				if !ok {
+					return fmt.Errorf("table output requires an object")
+				}
+				if _, err := fmt.Fprintln(&buf, summary(m)); err != nil {
+					return err
+				}
 			}
-			return output.RenderLines(os.Stdout, lines, emptyMsg)
+		case "json":
+			if err := output.RenderJSON(&buf, value); err != nil {
+				return err
+			}
+		case "yaml":
+			if err := output.RenderYAML(&buf, value); err != nil {
+				return err
+			}
+		case "raw":
+			if err := output.RenderRaw(&buf, value); err != nil {
+				return err
+			}
 		}
-		m, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("table output requires an object")
-		}
-		_, err = fmt.Fprintln(os.Stdout, summary(m))
-		return err
-	case "json":
-		return output.RenderJSON(os.Stdout, value)
-	case "yaml":
-		return output.RenderYAML(os.Stdout, value)
-	case "raw":
-		return output.RenderRaw(os.Stdout, value)
-	default:
-		return fmt.Errorf("unsupported output format %q (use json, table, yaml, or raw)", mode)
 	}
+	data := buf.Bytes()
+	if mode == "table" && flagJQ == "" && flagTemplate == "" {
+		data = colorizeTable(data)
+	}
+	return writeOutput(data)
+}
+
+func writeOutput(data []byte) error {
+	pager := strings.ToLower(flagPager)
+	if flagNoPager {
+		pager = "never"
+	}
+	if pager == "always" || (pager == "auto" && stdoutIsTTY()) {
+		command := strings.TrimSpace(os.Getenv("PAGER"))
+		parts := strings.Fields(command)
+		if len(parts) == 0 {
+			parts = []string{"less", "-FRX"}
+		}
+		p := exec.Command(parts[0], parts[1:]...)
+		p.Stdin = bytes.NewReader(data)
+		p.Stdout, p.Stderr = os.Stdout, os.Stderr
+		return p.Run()
+	}
+	_, err := os.Stdout.Write(data)
+	return err
+}
+
+func stdoutIsTTY() bool {
+	info, err := os.Stdout.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func colorizeTable(data []byte) []byte {
+	color := strings.ToLower(flagColor)
+	if color == "never" || (color == "auto" && !stdoutIsTTY()) {
+		return data
+	}
+	return append(append([]byte("\033[36m"), data...), []byte("\033[0m")...)
 }
 
 func splitFields(value string) []string {
@@ -264,12 +346,14 @@ func contains(values []string, target string) bool {
 	return false
 }
 
-func emitJQValue(value any, expr string) error {
+func emitJQValue(value any, expr string) error { return emitJQValueTo(os.Stdout, value, expr) }
+
+func emitJQValueTo(w io.Writer, value any, expr string) error {
 	results, err := jqEvaluate(expr, value)
 	if err != nil {
 		return fmt.Errorf("jq: %w", err)
 	}
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(w)
 	for _, result := range results {
 		if err := enc.Encode(result); err != nil {
 			return err
@@ -279,6 +363,10 @@ func emitJQValue(value any, expr string) error {
 }
 
 func emitTemplateValue(value any, expr string) error {
+	return emitTemplateValueTo(os.Stdout, value, expr)
+}
+
+func emitTemplateValueTo(w io.Writer, value any, expr string) error {
 	tpl, err := template.New("output").Funcs(template.FuncMap{
 		"json":   func(v any) (string, error) { b, e := json.Marshal(v); return string(b), e },
 		"pretty": func(v any) (string, error) { b, e := json.MarshalIndent(v, "", "  "); return string(b), e },
@@ -290,7 +378,7 @@ func emitTemplateValue(value any, expr string) error {
 	if err := tpl.Execute(&buf, value); err != nil {
 		return fmt.Errorf("template: %w", err)
 	}
-	_, err = fmt.Fprint(os.Stdout, buf.String())
+	_, err = io.Copy(w, &buf)
 	return err
 }
 

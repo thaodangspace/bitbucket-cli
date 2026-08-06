@@ -30,6 +30,20 @@ func TestPRGetTemplate(t *testing.T) {
 	}
 }
 
+func TestPRURLSelectorUsesURLRepository(t *testing.T) {
+	var gotPath string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		gotPath = r.URL.Path
+		return jsonResp(200, `{"id":42,"title":"Fix"}`), nil
+	}, "pr", "get", "https://bitbucket.org/other/project/pull-requests/42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/2.0/repositories/other/project/pullrequests/42" {
+		t.Fatalf("unexpected path: %s", gotPath)
+	}
+}
+
 func TestBranchListYAML(t *testing.T) {
 	out, err := run(t, func(r *http.Request) (*http.Response, error) {
 		return jsonResp(200, `{"values":[{"name":"main","target":{"hash":"abc"}}]}`), nil

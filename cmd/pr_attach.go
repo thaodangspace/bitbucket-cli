@@ -40,10 +40,11 @@ func init() {
 			"Bitbucket Cloud does not support native pull request attachments.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseID(args[0])
+			selected, err := parsePullRequestSelector(args[0])
 			if err != nil {
 				return fail(err)
 			}
+			id := selected.ID
 			uploads, names, err := validateAttachFiles(attachFiles)
 			if err != nil {
 				return fail(err)
@@ -53,7 +54,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			ref, base, err := resolveRepo(cfg)
+			ref, base, err := resolveRepoFor(cfg, selected.Repository)
 			if err != nil {
 				return fail(err)
 			}

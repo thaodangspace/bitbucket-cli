@@ -27,7 +27,14 @@ func GenerateCommandMarkdown() string {
 			if use == "" {
 				use = child.Name()
 			}
-			b.WriteString(fmt.Sprintf("## `%s%s`\n\n%s\n\n", prefix, use, strings.TrimSpace(child.Short)))
+			fullName := strings.TrimSpace(prefix + use)
+			b.WriteString(fmt.Sprintf("## `%s`\n\n%s\n\n", fullName, strings.TrimSpace(child.Short)))
+			classification, scope := commandMetadata(fullName)
+			b.WriteString(fmt.Sprintf("- Classification: **%s**\n- Required scopes: `%s`\n- Example: `%s`\n", classification, scope, "bitbucket-cli "+fullName))
+			if fields := jsonFieldsForCommand(fullName); fields != "" {
+				b.WriteString("- JSON fields: `" + fields + "`\n")
+			}
+			b.WriteString("\n")
 			flags := child.LocalNonPersistentFlags()
 			var names []string
 			flags.VisitAll(func(f *pflag.Flag) { names = append(names, fmt.Sprintf("`--%s` — %s", f.Name, f.Usage)) })
@@ -40,4 +47,35 @@ func GenerateCommandMarkdown() string {
 	}
 	walk(rootCmd, "")
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+func jsonFieldsForCommand(name string) string {
+	switch {
+	case strings.HasPrefix(name, "pr list"), strings.HasPrefix(name, "pr get"):
+		return "id,title,state,author,source,destination,reviewers"
+	case strings.HasPrefix(name, "branch list"):
+		return "name,target,links"
+	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"):
+		return "uuid,build_number,state,target,trigger,steps"
+	case strings.HasPrefix(name, "repo get"):
+		return "uuid,full_name,name,is_private,mainbranch,links"
+	default:
+		return ""
+	}
+}
+
+func commandMetadata(name string) (classification, scope string) {
+	classification, scope = "read", "read:repository:bitbucket"
+	if strings.HasPrefix(name, "pr ") {
+		scope = "read:pullrequest:bitbucket"
+	}
+	if strings.HasPrefix(name, "pipeline ") {
+		scope = "read:pipeline:bitbucket"
+	}
+	for _, write := range []string{"pr comment", "pr attach", "pr create", "pr update", "auth login", "auth logout", "alias set", "alias delete"} {
+		if strings.HasPrefix(name, write) {
+			return "write", scope
+		}
+	}
+	return classification, scope
 }

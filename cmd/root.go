@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
+	"github.com/thaodangspace/bitbucket-cli/output"
 )
 
 // version is the bitbucket-cli release version. Release builds set it via
@@ -50,8 +51,14 @@ var rootCmd = &cobra.Command{
 
 // Execute runs the root command and exits non-zero on error.
 func Execute() {
+	args, err := expandAliasArgs(os.Args[1:])
+	if err != nil {
+		output.WriteError(os.Stderr, err)
+		os.Exit(exitCode(err))
+	}
+	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
 }
 

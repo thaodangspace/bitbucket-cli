@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -22,8 +23,9 @@ var pipelineCmd = &cobra.Command{
 
 func init() {
 	var (
-		listState string
-		listLimit int
+		listState      string
+		listLimit      int
+		pipelineGetWeb bool
 	)
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -69,7 +71,7 @@ func init() {
 		Long:  "Fetch a pipeline run by its UUID (e.g. {abc123-...}) and include its steps in the output.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			uuid, selectorErr := selector.Pipeline(args[0])
+			selected, selectorErr := selector.Pipeline(args[0])
 			if selectorErr != nil {
 				return fail(selectorErr)
 			}
@@ -78,7 +80,17 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			_, base, err := resolveRepo(cfg)
+			ref, base, err := resolveRepoFor(cfg, selected.Repository)
+			if err != nil {
+				return fail(err)
+			}
+			if pipelineGetWeb && selected.BuildNumber != nil {
+				return fail(fmt.Errorf("--web requires a pipeline UUID or URL, not a build number"))
+			}
+			if pipelineGetWeb {
+				return openWeb(buildPipelineURL(ref.Workspace, ref.RepoSlug, selected.UUID))
+			}
+			uuid, err := resolvePipelineID(ctx(cmd), client, base, selected)
 			if err != nil {
 				return fail(err)
 			}
@@ -102,6 +114,7 @@ func init() {
 			return emitPipelineGet(pipelineRaw, stepsRaw)
 		},
 	}
+	getCmd.Flags().BoolVar(&pipelineGetWeb, "web", false, "Open the pipeline in a browser")
 
 	pipelineCmd.AddCommand(listCmd, getCmd)
 	rootCmd.AddCommand(pipelineCmd)
@@ -110,6 +123,32 @@ func init() {
 // emitPipelineGet renders a pipeline with its steps. In JSON mode (default)
 // it merges steps into the pipeline object; in --pretty mode it renders a
 // multi-section text summary.
+func resolvePipelineID(c context.Context, client *bitbucket.Client, base string, selected selector.PipelineSelector) (string, error) {
+	if selected.UUID != "" {
+		return selected.UUID, nil
+	}
+	if selected.BuildNumber == nil {
+		return "", fmt.Errorf("pipeline selector has no UUID or build number")
+	}
+	q := url.Values{"q": {fmt.Sprintf("build_number=%d", *selected.BuildNumber)}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
+	values, err := client.Paginate(c, fmt.Sprintf("%s/pipelines/?%s", base, q.Encode()), 1, bitbucket.DefaultMaxPages)
+	if err != nil {
+		return "", err
+	}
+	if len(values) == 0 {
+		return "", fmt.Errorf("pipeline build number %d was not found", *selected.BuildNumber)
+	}
+	var pipeline map[string]any
+	if err := json.Unmarshal(values[0], &pipeline); err != nil {
+		return "", err
+	}
+	uuid, _ := pipeline["uuid"].(string)
+	if uuid == "" {
+		return "", fmt.Errorf("pipeline build number %d has no UUID", *selected.BuildNumber)
+	}
+	return uuid, nil
+}
+
 func emitPipelineGet(pipelineRaw json.RawMessage, stepsRaw []json.RawMessage) error {
 	// Decode pipeline for both modes.
 	var pipeline map[string]any

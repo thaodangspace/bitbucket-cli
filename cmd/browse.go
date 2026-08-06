@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 )
 
 // openBrowser is injectable so browse can be tested without launching a GUI.
@@ -24,6 +23,44 @@ var openBrowser = func(target string) error {
 		name, args = "xdg-open", []string{target}
 	}
 	return exec.Command(name, args...).Run()
+}
+
+func buildPRURL(workspace, repo string, id int) string {
+	return fmt.Sprintf("https://bitbucket.org/%s/%s/pull-requests/%d", url.PathEscape(workspace), url.PathEscape(repo), id)
+}
+
+func buildPipelineURL(workspace, repo, uuid string) string {
+	return fmt.Sprintf("https://bitbucket.org/%s/%s/addon/pipelines/home#!/results/%s", url.PathEscape(workspace), url.PathEscape(repo), url.PathEscape(uuid))
+}
+
+func buildRepositoryURL(workspace, repo string) string {
+	u, _ := buildBrowseURL(workspace, repo, "", "")
+	return u
+}
+
+func openWeb(target string) error {
+	if err := openBrowser(target); err != nil {
+		return fail(fmt.Errorf("open browser: %w", err))
+	}
+	return nil
+}
+
+func buildBrowseURL(workspace, repo, path, branch string) (string, error) {
+	segments := []string{workspace, repo}
+	if strings.TrimSpace(branch) != "" {
+		segments = append(segments, "src", branch)
+	}
+	for _, part := range strings.Split(strings.Trim(path, "/"), "/") {
+		if part == "" {
+			continue
+		}
+		if part == "." || part == ".." {
+			return "", fmt.Errorf("browse path must not contain %q", part)
+		}
+		segments = append(segments, part)
+	}
+	u := url.URL{Scheme: "https", Host: "bitbucket.org", Path: "/" + strings.Join(segments, "/")}
+	return u.String(), nil
 }
 
 func init() {
@@ -42,16 +79,13 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			target := "https://bitbucket.org/" + bitbucket.EncodePathSegment(ref.Workspace) + "/" + bitbucket.EncodePathSegment(ref.RepoSlug)
-			if len(args) == 1 && strings.TrimSpace(args[0]) != "" {
-				path := strings.Trim(args[0], "/")
-				if strings.Contains(path, "..") {
-					return fail(fmt.Errorf("browse path must not contain .."))
-				}
-				target += "/" + path
+			path := ""
+			if len(args) == 1 {
+				path = args[0]
 			}
-			if strings.TrimSpace(branch) != "" {
-				target += "/branch/" + url.PathEscape(branch)
+			target, err := buildBrowseURL(ref.Workspace, ref.RepoSlug, path, branch)
+			if err != nil {
+				return fail(err)
 			}
 			if noBrowser {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), target)
