@@ -64,7 +64,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.PullRequestSummary, "No pull requests found."); err != nil {
+			if err := emitListFields(values, output.PullRequestFields, output.PullRequestSummary, "No pull requests found."); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -98,7 +98,7 @@ func init() {
 			if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.PullRequestSummary); err != nil {
+			if err := emitObjectFields(raw, output.PullRequestFields, output.PullRequestSummary); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -129,7 +129,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.CommentSummary, "No comments found."); err != nil {
+			if err := emitListFields(values, output.CommentFields, output.CommentSummary, "No comments found."); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -161,7 +161,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.CommitSummary, "No commits found."); err != nil {
+			if err := emitListFields(values, output.CommitFields, output.CommitSummary, "No commits found."); err != nil {
 				return fail(err)
 			}
 			return nil

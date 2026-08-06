@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
+	"gopkg.in/yaml.v3"
 )
 
 // RenderJSON writes v as indented JSON followed by a newline.
@@ -16,6 +17,23 @@ func RenderJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+// RenderRaw writes compact JSON. It is useful when a consumer needs a
+// machine-readable value without the default indentation.
+func RenderRaw(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	return enc.Encode(v)
+}
+
+// RenderYAML writes v as YAML followed by a newline.
+func RenderYAML(w io.Writer, v any) error {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
 }
 
 // RenderLines writes one string per line. When lines is empty, it writes the

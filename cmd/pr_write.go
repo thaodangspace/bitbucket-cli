@@ -103,7 +103,7 @@ func init() {
 			if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.PullRequestSummary); err != nil {
+			if err := emitObjectFields(raw, output.PullRequestFields, output.PullRequestSummary); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -166,7 +166,7 @@ func init() {
 			if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.PullRequestSummary); err != nil {
+			if err := emitObjectFields(raw, output.PullRequestFields, output.PullRequestSummary); err != nil {
 				return fail(err)
 			}
 			return nil

@@ -76,6 +76,14 @@ func init() {
 
 // runAPI implements `api <endpoint>`.
 func runAPI(cmd *cobra.Command, args []string) error {
+	// The API command keeps its historical local flags while also honoring
+	// persistent formatting flags placed before `api`.
+	if apiJQ == "" {
+		apiJQ = flagJQ
+	}
+	if apiTemplate == "" {
+		apiTemplate = flagTemplate
+	}
 	if apiJQ != "" && apiTemplate != "" {
 		return fail(fmt.Errorf("--jq and --template are mutually exclusive"))
 	}
@@ -909,6 +917,11 @@ func parseJQAccessors(expr string) ([]jqAccessor, error) {
 			}
 			inner := strings.TrimSpace(rest[1:j])
 			rest = rest[j+1:]
+			// jq permits chained accessors such as .[].title without a
+			// pipe; normalize the separator after a bracket accessor.
+			if rest != "" && rest[0] == '.' {
+				rest = rest[1:]
+			}
 			if inner == "" {
 				accs = append(accs, jqIterate{})
 				continue

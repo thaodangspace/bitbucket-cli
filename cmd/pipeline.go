@@ -9,6 +9,7 @@ import (
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 	"github.com/thaodangspace/bitbucket-cli/output"
+	"github.com/thaodangspace/bitbucket-cli/selector"
 
 	"github.com/spf13/cobra"
 )
@@ -53,7 +54,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := emitList(values, output.PipelineSummary, "No pipelines found."); err != nil {
+			if err := emitListFields(values, output.PipelineFields, output.PipelineSummary, "No pipelines found."); err != nil {
 				return fail(err)
 			}
 			return nil
@@ -68,9 +69,9 @@ func init() {
 		Long:  "Fetch a pipeline run by its UUID (e.g. {abc123-...}) and include its steps in the output.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			uuid := strings.TrimSpace(args[0])
-			if uuid == "" {
-				return fail(fmt.Errorf("pipeline UUID must not be empty"))
+			uuid, selectorErr := selector.Pipeline(args[0])
+			if selectorErr != nil {
+				return fail(selectorErr)
 			}
 
 			cfg, client, err := newClient()
@@ -126,12 +127,20 @@ func emitPipelineGet(pipelineRaw json.RawMessage, stepsRaw []json.RawMessage) er
 		steps = append(steps, step)
 	}
 
-	if flagPretty {
-		_, err := fmt.Fprintln(os.Stdout, output.PipelineGetSummary(pipeline, steps))
-		return err
-	}
-
-	// JSON mode: merge steps into pipeline and render.
+	// Include steps in the structured value so every output mode and transform
+	// sees the same response.
 	pipeline["steps"] = steps
-	return output.RenderJSON(os.Stdout, pipeline)
+	return renderValue(pipeline, output.PipelineFields,
+		func(m map[string]any) string {
+			projectedSteps := steps
+			if raw, ok := m["steps"].([]any); ok {
+				projectedSteps = make([]map[string]any, 0, len(raw))
+				for _, item := range raw {
+					if step, ok := item.(map[string]any); ok {
+						projectedSteps = append(projectedSteps, step)
+					}
+				}
+			}
+			return output.PipelineGetSummary(m, projectedSteps)
+		}, false, "")
 }

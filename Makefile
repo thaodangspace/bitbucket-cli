@@ -1,4 +1,4 @@
-.PHONY: build install test test-verbose docs-install docs-dev docs-build docs-preview clean fmt vet lint
+.PHONY: build install test test-verbose docs-install docs-dev docs-build docs-preview docs-generate docs-check clean fmt vet lint
 
 BINARY := bitbucket-cli
 MODULE := github.com/thaodangspace/bitbucket-cli
@@ -34,6 +34,20 @@ docs-build: docs-install
 # Preview the production documentation build.
 docs-preview:
 	npm --prefix docs run preview
+
+# Regenerate the Cobra command reference.
+docs-generate:
+	go run ./tools/gendocs
+
+# Verify generated command documentation is committed and current.
+docs-check:
+	@set -e; \
+	go run ./tools/gendocs; \
+	if ! git diff --quiet -- docs/src/content/docs/reference.md; then \
+		echo "generated docs are stale; run make docs-generate"; \
+		git checkout -- docs/src/content/docs/reference.md; \
+		exit 1; \
+	fi
 
 # Remove the built binary.
 clean:

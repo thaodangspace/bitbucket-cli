@@ -33,7 +33,7 @@ func init() {
 			if err := client.Request(ctx(cmd), base, bitbucket.RequestOptions{}, &raw); err != nil {
 				return fail(err)
 			}
-			if err := emitObject(raw, output.RepoSummary); err != nil {
+			if err := emitObjectFields(raw, output.RepoFields, output.RepoSummary); err != nil {
 				return fail(err)
 			}
 			return nil

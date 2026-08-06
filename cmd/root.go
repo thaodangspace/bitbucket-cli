@@ -26,9 +26,17 @@ func resolveVersion() string {
 
 // Persistent flags shared by all subcommands.
 var (
-	flagWorkspace string
-	flagRepo      string
-	flagPretty    bool
+	flagWorkspace  string
+	flagRepo       string
+	flagRepository string
+	flagPretty     bool
+	flagJSON       string
+	flagJQ         string
+	flagTemplate   string
+	flagFormat     string
+	flagColor      string
+	flagPager      string
+	flagNoPager    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -51,5 +59,19 @@ func init() {
 	pf := rootCmd.PersistentFlags()
 	pf.StringVar(&flagWorkspace, "workspace", "", "Bitbucket workspace slug (defaults to BITBUCKET_DEFAULT_WORKSPACE or git remote)")
 	pf.StringVar(&flagRepo, "repo", "", "Bitbucket repository slug (defaults to BITBUCKET_DEFAULT_REPO or git remote)")
-	pf.BoolVar(&flagPretty, "pretty", false, "Render human-readable text instead of JSON")
+	pf.StringVarP(&flagRepository, "repository", "R", "", "Repository selector (workspace/repo, Bitbucket URL, or current git remote)")
+	pf.BoolVar(&flagPretty, "pretty", false, "Render human-readable table output (alias for --format table)")
+	pf.StringVar(&flagJSON, "json", "", "Select documented output fields (comma-separated)")
+	pf.StringVar(&flagJQ, "jq", "", "Transform JSON output with a jq expression")
+	pf.StringVar(&flagTemplate, "template", "", "Format JSON output with a Go template")
+	pf.StringVar(&flagFormat, "format", "json", "Output format: json, table, yaml, or raw")
+	pf.StringVar(&flagColor, "color", "auto", "Colorize output: auto, always, or never")
+	pf.StringVar(&flagPager, "pager", "auto", "Pager behavior: auto, always, or never")
+	pf.BoolVar(&flagNoPager, "no-pager", false, "Disable paging (alias for --pager never)")
+	rootCmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+		if err := validateOutputFlags(); err != nil {
+			return fail(err)
+		}
+		return nil
+	}
 }

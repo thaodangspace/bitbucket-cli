@@ -7,7 +7,14 @@ description: Inspect Bitbucket Cloud resources and perform explicit pull request
 
 - `--workspace SLUG` overrides the workspace default.
 - `--repo SLUG` overrides the repository default.
-- `--pretty` prints one-line summaries instead of JSON.
+- `--pretty` prints deterministic table summaries (the table format alias).
+- `--json FIELD,...` selects documented stable fields; `--jq EXPR` and
+  `--template TEMPLATE` transform the selected object.
+- `--format json|table|yaml|raw` chooses the output encoding.
+- `-R, --repository` accepts `workspace/repo` or a Bitbucket URL; the legacy
+  `--workspace` and `--repo` flags remain supported.
+- `--color auto|always|never`, `--pager auto|always|never`, and `--no-pager`
+  control shell integration.
 - List commands default to a limit of 20; pagination is bounded internally.
 
 ## Authentication
@@ -82,6 +89,11 @@ explicitly asked for the remote change.
 bitbucket-cli branch list [--query QUERY] [--limit N]
 bitbucket-cli pipeline list [--state STATE] [--limit N]
 bitbucket-cli pipeline get <uuid>
+bitbucket-cli browse [path] [--branch BRANCH] [--no-browser]
+bitbucket-cli completion bash|zsh|fish|powershell
+bitbucket-cli alias set <name> <command>
+bitbucket-cli alias delete <name>
+bitbucket-cli alias list
 ```
 
 Pipeline states include `PENDING`, `IN_PROGRESS`, `COMPLETED`, `PAUSED`,

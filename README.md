@@ -131,8 +131,15 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 | `pr create --source <branch> --title <t> [...]` | Create a pull request (write) |
 | `pr update <id> [--title <t>] [--description ...]` | Update a PR's title/description (write) |
 | `branch list [--query <q>] [--limit N]` | List branches |
+| `pipeline list [--state <state>] [--limit N]` | List pipeline runs |
+| `pipeline get <uuid>` | Pipeline details and steps |
+| `browse [<path>]` | Open the repository in a browser |
+| `completion bash\|zsh\|fish\|powershell` | Generate shell completion |
+| `alias set\|delete\|list` | Manage local command aliases |
 
-Global flags: `--workspace`, `--repo`, `--pretty`. Default `--limit` is 20.
+Global flags: `--workspace`, `--repo`, `-R/--repository`, `--pretty`, `--json`,
+`--jq`, `--template`, `--format json|table|yaml|raw`, `--color`, and `--pager`.
+Default `--limit` is 20.
 
 ## Examples
 
@@ -174,11 +181,14 @@ bitbucket-cli --workspace acme --repo web pr list
 
 ## Output contract
 
-- **Default**: JSON on stdout. List commands emit a JSON array of the full
-  Bitbucket objects; single-entity commands emit the entity object.
-- **`--pretty`**: one-line text summaries (matching the original extension).
-- **Errors**: JSON `{"error":{"message":...,"status":...,"method":...,"url":...,"excerpt":...}}`
-  on stderr, exit code 1. Config/usage errors carry only `message`.
+- **Default**: full JSON on stdout. List commands emit an array; single-entity
+  commands emit an object.
+- **`--json id,title,...`**: select documented stable fields. `--jq` and
+  `--template` transform the projection (or the full response without it).
+- **`--format`** supports `json`, `table`, `yaml`, and `raw`; `--pretty` is an
+  alias for the deterministic table view.
+- **Errors**: structured JSON on stderr and never transformed by `--jq` or
+  templates. Config/usage errors carry only `message`.
 
 ## Security
 
