@@ -69,6 +69,7 @@ func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string
 	flagStatusJSON, flagLogoutYes = false, false
 	resetFlags(rootCmd)
 	attachFiles, attachMessage = nil, ""
+	commitListIncludes, commitListExcludes = nil, nil
 	apiMethod = ""
 	apiHeaders, apiRawField, apiField = nil, nil, nil
 	apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""

@@ -53,3 +53,17 @@ func TestProjectionOmitsMissingFields(t *testing.T) {
 		t.Fatalf("unexpected projection: %#v", got)
 	}
 }
+
+func TestInsightsUseBitbucketTimestampFields(t *testing.T) {
+	value := map[string]any{"created_on": "2025-01-01T00:00:00Z", "updated_on": "2025-01-02T00:00:00Z"}
+	got, err := ReportFields.Project(value, []string{"created_on", "updated_on"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, value) {
+		t.Fatalf("unexpected report projection: %#v", got)
+	}
+	if _, err := AnnotationFields.Project(value, []string{"created_at"}); err == nil {
+		t.Fatal("expected created_at to be rejected")
+	}
+}
