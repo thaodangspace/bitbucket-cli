@@ -507,16 +507,100 @@ Repository commands
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli repo`
 
-## `repo get`
+## `repo browse [<workspace/repo>] [<path>]`
 
-Get details for a Bitbucket Cloud repository
+Open a repository path in a browser
 
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
-- Example: `bitbucket-cli repo get`
+- Example: `bitbucket-cli repo browse [<workspace/repo>] [<path>]`
+
+Flags: `--branch` — Branch or ref to browse
+
+## `repo clone <workspace/repo|url> [<directory>] [-- <git-flags>...]`
+
+Clone a repository
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli repo clone <workspace/repo|url> [<directory>] [-- <git-flags>...]`
+
+Flags: `--protocol` — Clone protocol: https or ssh (defaults to config)
+
+## `repo create <name>`
+
+Create a repository
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Example: `bitbucket-cli repo create <name>`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
-Flags: `--web` — Open the repository in a browser
+Flags: `--clone` — Clone after creation; `--description` — Repository description; `--directory` — Directory for --clone; `--main-branch` — Main branch name; `--private` — Make the repository private; `--project` — Project key; `--protocol` — Clone protocol: https or ssh (defaults to config); `--remote-name` — Remote name used by --source; `--source` — Existing local git repository to push after creation
+
+## `repo delete [<workspace/repo>]`
+
+Delete a repository
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Example: `bitbucket-cli repo delete [<workspace/repo>]`
+
+Flags: `--yes` — Confirm deletion
+
+## `repo edit [<workspace/repo>]`
+
+Edit a repository
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Example: `bitbucket-cli repo edit [<workspace/repo>]`
+- JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
+
+Flags: `--description` — New repository description; `--fork-policy` — Fork policy: allow_forks, no_public_forks, or no_forks; `--has-issues` — Enable or disable issue tracking; `--has-wiki` — Enable or disable wiki; `--main-branch` — New main branch name; `--name` — New repository name; `--private` — Set private visibility
+
+## `repo fork [<workspace/repo>]`
+
+Fork a repository
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Example: `bitbucket-cli repo fork [<workspace/repo>]`
+- JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
+
+Flags: `--clone` — Clone the fork after creation; `--directory` — Directory for --clone; `--name` — Fork name; `--protocol` — Clone protocol: https or ssh (defaults to config); `--remote-name` — Remote name for the fork; `--remote` — Configure the fork as a git remote; `--workspace` — Target workspace; `--yes` — Confirm remote changes
+
+## `repo list [<workspace>]`
+
+List repositories in a workspace
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli repo list [<workspace>]`
+- JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
+
+Flags: `--fork` — Only fork repositories; `--limit` — Maximum repositories to return; `--private` — Only private repositories; `--project` — Filter by project key; `--public` — Only public repositories; `--query` — Bitbucket q expression; `--role` — Repository role: owner, member, or contributor; `--sort` — Sort field, optionally prefixed with -; `--source` — Only non-fork repositories
+
+## `repo set-default [<workspace/repo>]`
+
+Set the local repository default
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Example: `bitbucket-cli repo set-default [<workspace/repo>]`
+
+Flags: `--value` — Repository selector (normally use the positional argument)
+
+## `repo view [<workspace/repo>]`
+
+View a repository
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli repo view [<workspace/repo>]`
+- JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
+
+Flags: `--branch` — Branch or ref used for --readme; `--readme` — Print the repository README; `--web` — Open the repository in a browser
 
 ## `status`
 

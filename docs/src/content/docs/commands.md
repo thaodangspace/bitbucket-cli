@@ -41,11 +41,22 @@ bitbucket-cli config path
 bitbucket-cli config get <key>
 bitbucket-cli config set <key> <value>
 bitbucket-cli config list
-bitbucket-cli repo get [--web]
+bitbucket-cli repo list [<workspace>] [--role owner|member|contributor] [--private|--public]
+bitbucket-cli repo view [<workspace/repo>] [--readme] [--branch REF] [--web]
+bitbucket-cli repo create <name> --workspace WORKSPACE [--private] [--clone|--source PATH]
+bitbucket-cli repo edit [<workspace/repo>] [--name NAME] [--description TEXT] [--private=<bool>]
+bitbucket-cli repo delete [<workspace/repo>] --yes
+bitbucket-cli repo fork [<workspace/repo>] [--workspace TARGET] [--clone] [--remote]
+bitbucket-cli repo clone <workspace/repo|url> [<directory>] [-- <git-flags>...]
+bitbucket-cli repo browse [<workspace/repo>] [<path>] [--branch REF]
+bitbucket-cli repo set-default [<workspace/repo>]
 ```
 
-`config list` redacts the API token. `repo get` resolves the target using
-explicit flags, configured defaults, or the local Bitbucket git remote.
+`repo get` remains a compatibility alias for `repo view`. `config list` redacts
+the API token. Repository resolution gives explicit selectors precedence, then
+the local `bitbucket-cli.repository` git config, then matching Bitbucket
+remotes, then configured defaults. Repository writes require explicit user
+intent; `repo delete` always requires `--yes`.
 
 ## Pull requests
 

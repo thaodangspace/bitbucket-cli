@@ -55,8 +55,12 @@ func RequiredScopesFor(method, path string) string {
 		return "repository:read"
 	case strings.Contains(path, "/pipeline"):
 		return "pipeline:read"
+	case strings.Contains(path, "/repositories") && method != http.MethodGet:
+		return "write:repository:bitbucket"
+	case method == http.MethodGet:
+		return "read:repository:bitbucket"
 	default:
-		return "repository:read"
+		return "admin:repository:bitbucket"
 	}
 }
 

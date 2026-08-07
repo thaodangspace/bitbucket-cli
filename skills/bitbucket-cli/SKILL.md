@@ -43,7 +43,11 @@ bitbucket-cli pr get <id>                   # one PR
 bitbucket-cli pr comments <id>              # comments on a PR
 bitbucket-cli pr commits <id>               # commits on a PR
 bitbucket-cli branch list --query 'name ~ "feature/"'
-bitbucket-cli repo get                      # repository details
+bitbucket-cli repo list [workspace]         # discover repositories
+bitbucket-cli repo view [workspace/repo]     # repository details or --readme
+bitbucket-cli repo get                       # compatibility alias for view
+bitbucket-cli repo clone workspace/repo      # clone without embedding tokens
+bitbucket-cli repo browse workspace/repo path
 ```
 
 Pipe JSON into `jq` to extract fields, e.g. `bitbucket-cli pr list --state OPEN | jq '.[].id'`.
@@ -64,6 +68,9 @@ before editing code:
    review-fix pass.
 4. Implement the fixes, run verification, and summarize which review items were
    addressed. Only post or update Bitbucket comments when the user explicitly asked.
+
+`repo set-default` stores a local git preference. Repository resolution precedence
+is explicit selector, local git config, matching Bitbucket remote, then global config.
 
 ## Write commands (only when the user explicitly asks)
 

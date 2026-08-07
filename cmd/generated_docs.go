@@ -61,7 +61,7 @@ func jsonFieldsForCommand(name string) string {
 		return "id,content,user,parent,inline,pending,resolution,created_on,updated_on"
 	case strings.HasPrefix(name, "pr task list"):
 		return "id,content,state,comment,creator,pending,resolved_on,resolved_by,created_on,updated_on"
-	case strings.HasPrefix(name, "repo get"):
+	case strings.HasPrefix(name, "repo list"), strings.HasPrefix(name, "repo view"), strings.HasPrefix(name, "repo get"), strings.HasPrefix(name, "repo create"), strings.HasPrefix(name, "repo edit"), strings.HasPrefix(name, "repo fork"):
 		return "uuid,full_name,name,is_private,mainbranch,links"
 	default:
 		return ""
@@ -76,10 +76,13 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "repo create", "repo edit", "repo delete", "repo fork", "repo set-default", "auth login", "auth logout", "alias set", "alias delete"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
+			}
+			if strings.HasPrefix(name, "repo ") {
+				return "write", "read:repository:bitbucket, write:repository:bitbucket"
 			}
 			return "write", scope
 		}

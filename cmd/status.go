@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/thaodangspace/bitbucket-cli/config"
 	"github.com/thaodangspace/bitbucket-cli/output"
 
 	"github.com/spf13/cobra"
@@ -22,7 +23,11 @@ func init() {
 			}
 
 			defaultRepo := ""
-			if cfg.DefaultWorkspace != "" && cfg.DefaultRepo != "" {
+			if local, ok := currentLocalDefault(); ok {
+				defaultRepo = local
+			} else if remote, ok := config.GitRepoRefFrom(""); ok {
+				defaultRepo = remote.Workspace + "/" + remote.RepoSlug
+			} else if cfg.DefaultWorkspace != "" && cfg.DefaultRepo != "" {
 				defaultRepo = cfg.DefaultWorkspace + "/" + cfg.DefaultRepo
 			}
 
