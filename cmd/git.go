@@ -141,6 +141,9 @@ type gitTracking interface {
 type gitCommit interface {
 	CurrentCommit(context.Context) (string, error)
 }
+type gitRevision interface {
+	Revision(context.Context, string) (string, error)
+}
 
 func (g execGit) AddRemote(ctx context.Context, name, remoteURL string) error {
 	if _, err := g.run(ctx, "remote", "add", name, remoteURL); err != nil {
@@ -184,6 +187,18 @@ func (g execGit) UpdateSubmodules(ctx context.Context) error {
 		return fmt.Errorf("update submodules: %w", err)
 	}
 	return nil
+}
+
+func (g execGit) Revision(ctx context.Context, ref string) (string, error) {
+	out, err := g.run(ctx, "rev-parse", ref)
+	if err != nil {
+		return "", fmt.Errorf("resolve git ref %q: %w", ref, err)
+	}
+	commit := strings.TrimSpace(string(out))
+	if !validCommit(commit) {
+		return "", fmt.Errorf("git returned an invalid commit for %q", ref)
+	}
+	return commit, nil
 }
 
 func (g execGit) CurrentCommit(ctx context.Context) (string, error) {

@@ -308,19 +308,19 @@ func chooseRemote(ctx context.Context, source prSource, sourceRepo selector.Repo
 		return Remote{}, false, err
 	}
 	for _, remote := range remotes {
-		for _, candidate := range []string{remote.FetchURL, remote.PushURL} {
-			if candidate == "" {
-				continue
-			}
-			if normalized, normalizeErr := normalizedRemoteURL(candidate); normalizeErr == nil && normalized == wantedNormalized {
-				return remote, false, nil
-			}
+		// Fetch always uses FetchURL. A push URL can point at a fork while
+		// the fetch URL points at upstream, so it must not select this remote.
+		if remote.FetchURL == "" {
+			continue
+		}
+		if normalized, normalizeErr := normalizedRemoteURL(remote.FetchURL); normalizeErr == nil && normalized == wantedNormalized {
+			return remote, false, nil
 		}
 	}
 	if sourceRepo.Workspace == destination.Workspace && sourceRepo.Repo == destination.Repo {
 		for _, remote := range remotes {
 			if remote.Name == "origin" {
-				if _, normalizeErr := normalizedRemoteURL(remote.FetchURL); normalizeErr == nil {
+				if normalized, normalizeErr := normalizedRemoteURL(remote.FetchURL); normalizeErr == nil && normalized == wantedNormalized {
 					return remote, false, nil
 				}
 			}
@@ -416,16 +416,14 @@ func checkoutPR(ctx context.Context, source prSource, remote Remote, prID int, l
 		if err := gitRunner.Checkout(ctx, "--detach", target); err != nil {
 			return nil, err
 		}
+		if err := updateSubmodules(ctx, recurse); err != nil {
+			return nil, err
+		}
+		result["branch"] = nil
 		return result, nil
 	}
 	if !validGitRef(localBranch) {
 		return nil, fmt.Errorf("invalid local branch name %q", localBranch)
-	}
-	target := fetchedRef
-	if source.Commit != "" {
-		// The source branch may have advanced between the API read and fetch;
-		// always create/reset at the exact commit recorded on the PR.
-		target = source.Commit
 	}
 	state, hasState := gitRunner.(gitBranchState)
 	exists, currentCommit := false, ""
@@ -434,6 +432,23 @@ func checkoutPR(ctx context.Context, source prSource, remote Remote, prID int, l
 		if err != nil {
 			return nil, err
 		}
+	}
+	targetCommit := source.Commit
+	if targetCommit == "" && exists {
+		if revisions, ok := gitRunner.(gitRevision); ok {
+			targetCommit, err = revisions.Revision(ctx, fetchedRef)
+			if err != nil {
+				return nil, err
+			}
+		} else if !force {
+			return nil, fmt.Errorf("cannot verify the fetched commit for existing branch %q; use --force to reset it", localBranch)
+		}
+	}
+	target := fetchedRef
+	if targetCommit != "" {
+		// The source branch may have advanced between the API read and fetch;
+		// always create/reset at the exact commit recorded on the PR.
+		target = targetCommit
 	}
 	if !exists {
 		if err := gitRunner.Checkout(ctx, "-b", localBranch, target); err != nil {
@@ -448,9 +463,9 @@ func checkoutPR(ctx context.Context, source prSource, remote Remote, prID int, l
 			return nil, err
 		}
 		result["reset"] = true
-	} else if currentCommit != source.Commit && source.Commit != "" {
+	} else if currentCommit != targetCommit && targetCommit != "" {
 		if !force {
-			ancestor, ancestorErr := state.IsAncestor(ctx, currentCommit, source.Commit)
+			ancestor, ancestorErr := state.IsAncestor(ctx, currentCommit, targetCommit)
 			if ancestorErr != nil {
 				return nil, ancestorErr
 			}
@@ -471,17 +486,22 @@ func checkoutPR(ctx context.Context, source prSource, remote Remote, prID int, l
 			return nil, err
 		}
 	}
-	if recurse {
-		updater, ok := gitRunner.(gitSubmodules)
-		if !ok {
-			return nil, fmt.Errorf("git runner cannot update submodules")
-		}
-		if err := updater.UpdateSubmodules(ctx); err != nil {
-			return nil, err
-		}
+	if err := updateSubmodules(ctx, recurse); err != nil {
+		return nil, err
 	}
 	result["branch"] = localBranch
 	return result, nil
+}
+
+func updateSubmodules(ctx context.Context, requested bool) error {
+	if !requested {
+		return nil
+	}
+	updater, ok := gitRunner.(gitSubmodules)
+	if !ok {
+		return fmt.Errorf("git runner cannot update submodules")
+	}
+	return updater.UpdateSubmodules(ctx)
 }
 
 func checkoutSummary(result map[string]any) string {

@@ -9,13 +9,19 @@ import (
 )
 
 type checkoutGitFake struct {
-	branch   string
-	dirty    []byte
-	remotes  []Remote
-	fetches  []string
-	checks   []string
-	added    []string
-	upstream []string
+	branch        string
+	dirty         []byte
+	remotes       []Remote
+	fetches       []string
+	checks        []string
+	added         []string
+	upstream      []string
+	exists        bool
+	currentCommit string
+	targetCommit  string
+	ancestor      bool
+	submoduleRuns int
+	fetchErr      error
 }
 
 func (g *checkoutGitFake) Root(context.Context) (string, error)            { return "/tmp/repo", nil }
@@ -24,7 +30,7 @@ func (g *checkoutGitFake) StatusPorcelain(context.Context) ([]byte, error) { ret
 func (g *checkoutGitFake) Remotes(context.Context) ([]Remote, error)       { return g.remotes, nil }
 func (g *checkoutGitFake) Fetch(_ context.Context, remote, refspec string, args ...string) error {
 	g.fetches = append(g.fetches, strings.Join(append(args, remote, refspec), " "))
-	return nil
+	return g.fetchErr
 }
 func (g *checkoutGitFake) Checkout(_ context.Context, args ...string) error {
 	g.checks = append(g.checks, strings.Join(args, " "))
@@ -35,17 +41,23 @@ func (g *checkoutGitFake) AddRemote(_ context.Context, name, remoteURL string) e
 	return nil
 }
 func (g *checkoutGitFake) BranchStatus(context.Context, string) (bool, string, error) {
-	return false, "", nil
+	return g.exists, g.currentCommit, nil
 }
 func (g *checkoutGitFake) IsAncestor(context.Context, string, string) (bool, error) {
-	return false, nil
+	return g.ancestor, nil
 }
 func (g *checkoutGitFake) SetUpstream(_ context.Context, branch, upstream string) error {
 	g.upstream = append(g.upstream, branch+"="+upstream)
 	return nil
 }
-func (g *checkoutGitFake) UpdateSubmodules(context.Context) error                 { return nil }
+func (g *checkoutGitFake) UpdateSubmodules(context.Context) error {
+	g.submoduleRuns++
+	return nil
+}
 func (g *checkoutGitFake) TrackingRemote(context.Context) (string, string, error) { return "", "", nil }
+func (g *checkoutGitFake) Revision(context.Context, string) (string, error) {
+	return g.targetCommit, nil
+}
 
 func withCheckoutGit(t *testing.T, git Git) {
 	t.Helper()

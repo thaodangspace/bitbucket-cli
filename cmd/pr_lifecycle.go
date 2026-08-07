@@ -32,8 +32,9 @@ func parseLifecycleSelector(value string) (selector.PullRequestSelector, error) 
 }
 
 // resolvePRContext resolves numeric IDs, Bitbucket URLs, source branches, and
-// the current branch. Branch selectors are deliberately rejected when they
-// match more than one candidate unless exactly one open PR targets main.
+// the current branch. Omitted selectors are strict: multiple candidates are
+// reported as ambiguous. Explicit branch selectors retain the historical
+// preference for one open PR targeting the repository's main branch.
 func resolvePRContext(cmd *cobra.Command, args []string) (selector.PullRequestSelector, repoContext, error) {
 	var selected selector.PullRequestSelector
 	var err error
@@ -106,7 +107,38 @@ func resolvePRContext(cmd *cobra.Command, args []string) (selector.PullRequestSe
 		return selected, repoContext{}, fmt.Errorf("no pull request found for source branch %q", branch)
 	}
 
-	if len(values) > 1 {
+	chosen := 0
+	if len(values) > 1 && !omitted {
+		var repo struct {
+			MainBranch struct {
+				Name string `json:"name"`
+			} `json:"mainbranch"`
+		}
+		chosen = -1
+		if err := client.Request(ctx(cmd), base, bitbucket.RequestOptions{}, &repo); err == nil && repo.MainBranch.Name != "" {
+			for i, raw := range values {
+				var item map[string]any
+				if err := json.Unmarshal(raw, &item); err != nil {
+					return selected, repoContext{}, err
+				}
+				state, _ := item["state"].(string)
+				destination := ""
+				if d, ok := item["destination"].(map[string]any); ok {
+					if b, ok := d["branch"].(map[string]any); ok {
+						destination, _ = b["name"].(string)
+					}
+				}
+				if strings.EqualFold(state, "OPEN") && destination == repo.MainBranch.Name {
+					if chosen != -1 {
+						chosen = -2
+						break
+					}
+					chosen = i
+				}
+			}
+		}
+	}
+	if chosen < 0 {
 		candidates := make([]string, 0, len(values))
 		for _, raw := range values {
 			var item map[string]any
@@ -119,7 +151,7 @@ func resolvePRContext(cmd *cobra.Command, args []string) (selector.PullRequestSe
 		return selected, repoContext{}, fmt.Errorf("ambiguous pull request selector for branch %q; candidates: %s", branch, strings.Join(candidates, ", "))
 	}
 	var candidate map[string]any
-	if err := json.Unmarshal(values[0], &candidate); err != nil {
+	if err := json.Unmarshal(values[chosen], &candidate); err != nil {
 		return selected, repoContext{}, err
 	}
 	id, ok := candidate["id"]
