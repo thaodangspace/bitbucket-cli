@@ -45,6 +45,18 @@ func RequiredScopes(path string) string {
 // RequiredScopesFor returns the documented token scopes for an HTTP operation.
 func RequiredScopesFor(method, path string) string {
 	switch {
+	case strings.Contains(path, "/reports") || strings.Contains(path, "/annotations"):
+		if method == http.MethodGet {
+			return "read:insights:bitbucket"
+		}
+		return "write:insights:bitbucket"
+	case strings.Contains(path, "/statuses"):
+		if method == http.MethodGet {
+			return "read:commit-status:bitbucket"
+		}
+		return "write:commit-status:bitbucket"
+	case strings.Contains(path, "/commit/") && strings.Contains(path, "/approve"):
+		return "write:repository:bitbucket"
 	case strings.Contains(path, "/downloads"):
 		return "write:repository:bitbucket"
 	case strings.Contains(path, "/pullrequests") && method != http.MethodGet:

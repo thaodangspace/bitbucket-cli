@@ -303,3 +303,40 @@ func numberish(v any) any {
 	}
 	return v
 }
+
+// CommitStatusSummary renders the state, key, name, and target URL.
+func CommitStatusSummary(status map[string]any) string {
+	state, _ := str(status, "state")
+	if state == "" {
+		state = "UNKNOWN"
+	}
+	key, _ := str(status, "key")
+	name, _ := str(status, "name")
+	target, _ := str(status, "url")
+	updated, _ := str(status, "updated_on")
+	return fmt.Sprintf("[%s] %s %s %s %s", state, key, name, updated, target)
+}
+
+// ReportSummary renders a concise Code Insights report line.
+func ReportSummary(report map[string]any) string {
+	title, _ := str(report, "title")
+	result, _ := str(report, "result")
+	if result == "" {
+		result = "UNKNOWN"
+	}
+	return fmt.Sprintf("[%s] %s", result, title)
+}
+
+// AnnotationSummary renders a concise Code Insights annotation line.
+func AnnotationSummary(annotation map[string]any) string {
+	path, _ := str(annotation, "path")
+	if path == "" {
+		path, _ = str(annotation, "file_path")
+	}
+	line := annotation["line"]
+	summary, _ := str(annotation, "summary")
+	if summary == "" {
+		summary, _ = str(annotation, "message")
+	}
+	return fmt.Sprintf("%s:%v %s", path, numberish(line), summary)
+}
