@@ -13,6 +13,8 @@ func TestRequiredScopesForRepositoryWorkflows(t *testing.T) {
 		{http.MethodPut, "/repositories/team/repo", "admin:repository:bitbucket"},
 		{http.MethodDelete, "/repositories/team/repo", "delete:repository:bitbucket"},
 		{http.MethodPost, "/repositories/team/repo/forks", "read:repository:bitbucket and write:repository:bitbucket"},
+		{http.MethodGet, "/repositories/team/repo/branch-restrictions", "admin:repository:bitbucket"},
+		{http.MethodGet, "/repositories/team/repo/branching-model/settings", "admin:repository:bitbucket"},
 	}
 	for _, tt := range tests {
 		if got := RequiredScopesFor(tt.method, tt.path); got != tt.want {

@@ -784,7 +784,7 @@ Create a tag
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli tag create <name> --target <commit|branch>`
 
-Flags: `--message` — Annotated tag message (omit for a lightweight tag); `--target` — Commit hash or branch to point at
+Flags: `--message` — Annotated tag message (Bitbucket creates an annotated tag and supplies a default when omitted); `--target` — Commit hash or branch to point at
 
 ## `tag delete <name> --yes`
 

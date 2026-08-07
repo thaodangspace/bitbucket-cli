@@ -104,9 +104,6 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if name == "main" {
-				return fail(fmt.Errorf("refusing to delete the main branch %q", name))
-			}
 			var repo struct {
 				MainBranch struct {
 					Name string `json:"name"`

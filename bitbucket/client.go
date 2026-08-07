@@ -57,9 +57,6 @@ func RequiredScopesFor(method, path string) string {
 		}
 		return "write:repository:bitbucket"
 	case strings.Contains(path, "/branch-restrictions"), strings.Contains(path, "/branching-model/settings"):
-		if method == http.MethodGet {
-			return "read:repository:bitbucket"
-		}
 		return "admin:repository:bitbucket"
 	case strings.Contains(path, "/default-reviewers"):
 		if method == http.MethodGet {

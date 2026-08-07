@@ -107,16 +107,23 @@ func resolveAccountSelector(ctx context.Context, client *bitbucket.Client, works
 	if err == nil {
 		return account, nil
 	}
-	q := url.Values{"q": {fmt.Sprintf(`display_name="%s"`, strings.ReplaceAll(selector, `"`, `\"`))}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
+	q := url.Values{"q": {fmt.Sprintf(`user.display_name="%s"`, strings.ReplaceAll(selector, `"`, `\"`))}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
 	values, queryErr := client.Paginate(ctx, "/workspaces/"+bitbucket.EncodePathSegment(workspace)+"/members?"+q.Encode(), 0, bitbucket.DefaultMaxPages)
 	if queryErr != nil {
 		return nil, fmt.Errorf("resolve user %q: %w", selector, queryErr)
 	}
 	matches := []map[string]any{}
 	for _, raw := range values {
-		var value map[string]any
-		if json.Unmarshal(raw, &value) == nil && strings.EqualFold(strings.TrimSpace(fmt.Sprint(value["display_name"])), selector) {
-			matches = append(matches, value)
+		var membership map[string]any
+		if json.Unmarshal(raw, &membership) != nil {
+			continue
+		}
+		account := membership
+		if nested, ok := membership["user"].(map[string]any); ok {
+			account = nested
+		}
+		if strings.EqualFold(strings.TrimSpace(fmt.Sprint(account["display_name"])), selector) {
+			matches = append(matches, account)
 		}
 	}
 	if len(matches) == 0 {

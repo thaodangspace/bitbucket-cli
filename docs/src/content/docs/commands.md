@@ -156,8 +156,8 @@ bitbucket-cli alias list
 Branch and tag mutations resolve branch/tag targets to an immutable commit hash,
 reject existing refs, and URL-encode names as a single path segment. Branch
 creation reports both `requested_target` and `resolved_target`; tag messages
-request annotated tags (without a message Bitbucket creates a lightweight/default
-message tag). Branch deletion always requires `--yes` and refuses the configured
+request annotated tags; Bitbucket supplies a default message when `--message`
+is omitted, and this API does not provide a lightweight-tag mode. Branch deletion always requires `--yes` and refuses the configured
 main branch.
 
 Branch restrictions use typed match modes: exactly one glob `--pattern` or

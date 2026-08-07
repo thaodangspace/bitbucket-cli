@@ -79,7 +79,7 @@ func init() {
 		return emitObjectFields(addTargetMetadata(raw, target, resolved), output.TagFields, output.TagSummary)
 	}}
 	createCmd.Flags().StringVar(&target, "target", "", "Commit hash or branch to point at")
-	createCmd.Flags().StringVar(&message, "message", "", "Annotated tag message (omit for a lightweight tag)")
+	createCmd.Flags().StringVar(&message, "message", "", "Annotated tag message (Bitbucket creates an annotated tag and supplies a default when omitted)")
 
 	var deleteYes bool
 	deleteCmd := &cobra.Command{Use: "delete <name> --yes", Short: "Delete a tag", Long: "Delete a tag. This is a destructive write operation and requires --yes.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {

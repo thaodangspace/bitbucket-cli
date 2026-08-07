@@ -321,8 +321,8 @@ func validateRestrictionBody(body map[string]any) error {
 	if mode != "glob" && mode != "branching_model" {
 		return fmt.Errorf("exactly one match mode is required: provide --pattern or --branch-type")
 	}
-	hasPattern := strings.TrimSpace(fmt.Sprint(body["pattern"])) != ""
-	hasType := strings.TrimSpace(fmt.Sprint(body["branch_type"])) != ""
+	hasPattern := nonEmptyRestrictionField(body, "pattern")
+	hasType := nonEmptyRestrictionField(body, "branch_type")
 	if hasPattern == hasType {
 		return fmt.Errorf("exactly one of --pattern or --branch-type is required")
 	}
@@ -334,6 +334,14 @@ func validateRestrictionBody(body map[string]any) error {
 	if mode == "branching_model" {
 		if err := validateBranchType(fmt.Sprint(body["branch_type"])); err != nil {
 			return err
+		}
+	}
+	if kind == "push" || kind == "restrict_merges" {
+		if _, ok := body["users"]; !ok {
+			body["users"] = []any{}
+		}
+		if _, ok := body["groups"]; !ok {
+			body["groups"] = []any{}
 		}
 	}
 	if (hasRestrictionEntries(body["users"]) || hasRestrictionEntries(body["groups"])) && kind != "push" && kind != "restrict_merges" {
@@ -355,6 +363,18 @@ func validateRestrictionBody(body map[string]any) error {
 		}
 	}
 	return nil
+}
+func nonEmptyRestrictionField(body map[string]any, key string) bool {
+	value, ok := body[key]
+	if !ok || value == nil {
+		return false
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed) != ""
+	default:
+		return strings.TrimSpace(fmt.Sprint(value)) != ""
+	}
 }
 func hasRestrictionEntries(value any) bool {
 	if list, ok := value.([]any); ok {

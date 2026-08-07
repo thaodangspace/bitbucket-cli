@@ -50,14 +50,16 @@ func TestBranchCreateRejectsExistingRef(t *testing.T) {
 	}
 }
 
-func TestBranchDeleteProtectsMainBeforeRequest(t *testing.T) {
-	called := false
+func TestBranchDeleteProtectsConfiguredMainBranch(t *testing.T) {
+	deleted := false
 	_, err := run(t, func(r *http.Request) (*http.Response, error) {
-		called = true
-		return jsonResp(http.StatusOK, `{}`), nil
+		if r.Method == http.MethodDelete {
+			deleted = true
+		}
+		return jsonResp(http.StatusOK, `{"mainbranch":{"name":"main"}}`), nil
 	}, "branch", "delete", "main", "--yes")
-	if err == nil || called || !strings.Contains(err.Error(), "main branch") {
-		t.Fatalf("expected main branch protection, err=%v called=%v", err, called)
+	if err == nil || deleted || !strings.Contains(err.Error(), "main branch") {
+		t.Fatalf("expected main branch protection, err=%v deleted=%v", err, deleted)
 	}
 }
 
@@ -87,10 +89,70 @@ func TestBranchingModelEditSendsOnlyChangedSection(t *testing.T) {
 	}
 }
 
+func TestRestrictionCreatesBothMatchModes(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		args  []string
+		check func(*testing.T, map[string]any)
+	}{
+		{name: "glob", args: []string{"--kind", "push", "--pattern", "main"}, check: func(t *testing.T, body map[string]any) {
+			if body["branch_match_kind"] != "glob" || body["pattern"] != "main" {
+				t.Fatalf("unexpected glob body: %#v", body)
+			}
+			if _, ok := body["users"].([]any); !ok {
+				t.Fatalf("push users must be explicit: %#v", body)
+			}
+			if _, ok := body["groups"].([]any); !ok {
+				t.Fatalf("push groups must be explicit: %#v", body)
+			}
+		}},
+		{name: "branching-model", args: []string{"--kind", "require_approvals_to_merge", "--branch-type", "feature", "--value", "2"}, check: func(t *testing.T, body map[string]any) {
+			if body["branch_match_kind"] != "branching_model" || body["branch_type"] != "feature" || body["value"] != float64(2) {
+				t.Fatalf("unexpected branch-type body: %#v", body)
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var body map[string]any
+			args := append([]string{"branch-restriction", "create"}, test.args...)
+			_, err := run(t, func(r *http.Request) (*http.Response, error) {
+				data, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(data, &body)
+				return jsonResp(http.StatusCreated, `{"id":1,"kind":"push","pattern":"main","branch_match_kind":"glob"}`), nil
+			}, args...)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			test.check(t, body)
+		})
+	}
+}
+
 func TestRestrictionValidationRequiresOneMatchMode(t *testing.T) {
 	_, err := run(t, nil, "branch-restriction", "create", "--kind", "push")
 	if err == nil || !strings.Contains(err.Error(), "exactly one") {
 		t.Fatalf("expected match-mode validation error: %v", err)
+	}
+}
+
+func TestDefaultReviewerDisplayNameUnwrapsMembership(t *testing.T) {
+	var path, memberQuery string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		path = r.URL.EscapedPath()
+		if strings.HasSuffix(r.URL.EscapedPath(), "/users/Jane%20Doe") {
+			return jsonResp(http.StatusNotFound, `{}`), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/members") {
+			memberQuery = r.URL.RawQuery
+			return jsonResp(http.StatusOK, `{"values":[{"user":{"uuid":"{u}","display_name":"Jane Doe"}}]}`), nil
+		}
+		return jsonResp(http.StatusOK, `{"uuid":"{u}","display_name":"Jane Doe"}`), nil
+	}, "default-reviewer", "add", "Jane Doe")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(path, "/default-reviewers/%7Bu%7D") || !strings.Contains(memberQuery, "user.display_name") {
+		t.Fatalf("unexpected member lookup: path=%s query=%s", path, memberQuery)
 	}
 }
 
