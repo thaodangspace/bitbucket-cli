@@ -143,6 +143,26 @@ Branch commands
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli branch`
 
+## `branch create <name> --target <commit|branch|tag>`
+
+Create a branch
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch create <name> --target <commit|branch|tag>`
+
+Flags: `--target` — Commit hash, branch, or tag to point at
+
+## `branch delete <name> --yes`
+
+Delete a branch
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch delete <name> --yes`
+
+Flags: `--yes` — Confirm deletion
+
 ## `branch list`
 
 List branches in a repository
@@ -150,9 +170,109 @@ List branches in a repository
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli branch list`
-- JSON fields: `name,target,links`
+- JSON fields: `name,target,links,requested_target,resolved_target`
 
-Flags: `--limit` — Maximum branches to return; `--query` — Bitbucket q expression, e.g. name ~ "feature/"
+Flags: `--limit` — Maximum branches to return; `--query` — Bitbucket q expression, e.g. name ~ "feature/"; `--sort` — Sort field, optionally prefixed with -
+
+## `branch view <name>`
+
+View a branch
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch view <name>`
+- JSON fields: `name,target,links,requested_target,resolved_target`
+
+## `branch-restriction`
+
+Branch restriction commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+## `branch-restriction create --kind <kind> (--pattern <glob>|--branch-type <type>)`
+
+Create a branch restriction
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction create --kind <kind> (--pattern <glob>|--branch-type <type>)`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--approvals` — Required approvals; `--branch-type` — Branching-model branch type; `--builds` — Required passing builds; `--from-file` — Read policy fields from YAML or JSON; `--group` — Group selector (repeatable); `--kind` — Restriction kind; `--pattern` — Glob pattern; `--user` — User selector (repeatable); `--value` — Kind-specific numeric requirement
+
+## `branch-restriction delete <id> --yes`
+
+Delete a branch restriction
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction delete <id> --yes`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--yes` — Confirm deletion
+
+## `branch-restriction edit <id> [flags]`
+
+Edit a branch restriction
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction edit <id> [flags]`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--approvals` — Required approvals; `--branch-type` — Branching-model branch type; `--builds` — Required passing builds; `--from-file` — Read policy fields from YAML or JSON; `--group` — Group selector (repeatable); `--kind` — Restriction kind; `--pattern` — Glob pattern; `--user` — User selector (repeatable); `--value` — Kind-specific numeric requirement
+
+## `branch-restriction list`
+
+List branch restrictions
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction list`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--branch-type` — Branching-model branch type; `--export` — Export restrictions to a YAML or JSON file (omit the value for stdout); `--kind` — Restriction kind; `--limit` — Maximum restrictions to return; `--pattern` — Glob pattern
+
+## `branch-restriction view <id>`
+
+View a branch restriction
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction view <id>`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+## `branching-model`
+
+Branching model commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branching-model`
+- JSON fields: `development,production,branch_types,default_branch_deletion`
+
+## `branching-model edit`
+
+Edit the repository branching model
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branching-model edit`
+- JSON fields: `development,production,branch_types,default_branch_deletion`
+
+Flags: `--bugfix-prefix` — Bugfix branch prefix; `--development-branch` — Development branch name; `--development-use-main` — Make development track the main branch; `--disable-production` — Disable the production branch; `--disable` — Disable a branch type (repeatable: feature, bugfix, release, hotfix); `--enable-production` — Enable the production branch; `--enable` — Enable a branch type (repeatable: feature, bugfix, release, hotfix); `--feature-prefix` — Feature branch prefix; `--hotfix-prefix` — Hotfix branch prefix; `--production-branch` — Production branch name; `--release-prefix` — Release branch prefix
+
+## `branching-model view`
+
+View the repository branching model
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branching-model view`
+- JSON fields: `development,production,branch_types,default_branch_deletion`
 
 ## `browse [path]`
 
@@ -364,6 +484,44 @@ Set a config value, writing it to the config file
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli config set <key> <value>`
+
+## `default-reviewer`
+
+Default reviewer commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+## `default-reviewer add <user-selector>`
+
+Add a default reviewer
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer add <user-selector>`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+## `default-reviewer list`
+
+List default reviewers
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer list`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+## `default-reviewer remove <user-selector> --yes`
+
+Remove a default reviewer
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer remove <user-selector> --yes`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+Flags: `--yes` — Confirm removal
 
 ## `pipeline`
 
@@ -859,3 +1017,51 @@ Check bitbucket-cli configuration
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli status`
+
+## `tag`
+
+Tag commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag`
+
+## `tag create <name> --target <commit|branch>`
+
+Create a tag
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag create <name> --target <commit|branch>`
+
+Flags: `--message` — Annotated tag message (Bitbucket creates an annotated tag and supplies a default when omitted); `--target` — Commit hash or branch to point at
+
+## `tag delete <name> --yes`
+
+Delete a tag
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag delete <name> --yes`
+
+Flags: `--yes` — Confirm deletion
+
+## `tag list`
+
+List tags in a repository
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag list`
+- JSON fields: `name,target,message,links,requested_target,resolved_target`
+
+Flags: `--limit` — Maximum tags to return; `--query` — Bitbucket q expression; `--sort` — Sort field, optionally prefixed with -
+
+## `tag view <name>`
+
+View a tag
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag view <name>`
+- JSON fields: `name,target,message,links,requested_target,resolved_target`

@@ -101,19 +101,6 @@ func newCommitContext(cmd *cobra.Command, value string, resolve bool) (commitCon
 	return commitContext{client: client, base: base, workspace: ref.Workspace, repo: ref.RepoSlug, requested: value, resolved: resolved}, nil
 }
 
-func hashLooksComplete(value string) bool {
-	value = strings.TrimSpace(value)
-	if len(value) != 40 {
-		return false
-	}
-	for _, r := range value {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
-
 func resolveCommitRefDirect(ctx context.Context, client *bitbucket.Client, base, spec string) (string, error) {
 	var v struct {
 		Hash string `json:"hash"`

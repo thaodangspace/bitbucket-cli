@@ -59,8 +59,16 @@ func jsonFieldsForCommand(name string) string {
 	switch {
 	case strings.HasPrefix(name, "pr list"), strings.HasPrefix(name, "pr get"), strings.HasPrefix(name, "pr view"), strings.HasPrefix(name, "pr status"), strings.HasPrefix(name, "pr current"):
 		return "id,title,state,author,source,destination,reviewers"
-	case strings.HasPrefix(name, "branch list"):
-		return "name,target,links"
+	case strings.HasPrefix(name, "branch list"), strings.HasPrefix(name, "branch view"), strings.HasPrefix(name, "branch get"):
+		return "name,target,links,requested_target,resolved_target"
+	case strings.HasPrefix(name, "tag list"), strings.HasPrefix(name, "tag view"), strings.HasPrefix(name, "tag get"):
+		return "name,target,message,links,requested_target,resolved_target"
+	case strings.HasPrefix(name, "branch-restriction"):
+		return "id,kind,branch_match_kind,pattern,branch_type,value,users,groups"
+	case strings.HasPrefix(name, "default-reviewer"):
+		return "uuid,account_id,display_name,nickname,links"
+	case strings.HasPrefix(name, "branching-model"):
+		return "development,production,branch_types,default_branch_deletion"
 	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"):
 		return "uuid,build_number,state,target,trigger,steps"
 	case strings.HasPrefix(name, "pr comments"), strings.HasPrefix(name, "pr comment"):
@@ -98,7 +106,7 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
 		scope = "read:insights:bitbucket"
 	}
-	if name == "repo create" || strings.HasPrefix(name, "repo create ") || name == "repo edit [<workspace/repo>]" || strings.HasPrefix(name, "repo edit ") {
+	if strings.HasPrefix(name, "branching-model edit") || strings.HasPrefix(name, "branch-restriction create") || strings.HasPrefix(name, "branch-restriction edit") || strings.HasPrefix(name, "branch-restriction delete") || strings.HasPrefix(name, "default-reviewer add") || strings.HasPrefix(name, "default-reviewer remove") || name == "repo create" || strings.HasPrefix(name, "repo create ") || name == "repo edit [<workspace/repo>]" || strings.HasPrefix(name, "repo edit ") {
 		return "admin", "admin:repository:bitbucket"
 	}
 	if name == "repo delete [<workspace/repo>]" || strings.HasPrefix(name, "repo delete ") {
@@ -110,7 +118,7 @@ func commandMetadata(name string) (classification, scope string) {
 	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
 		return "write", "none (local git configuration)"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "commit status delete", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "commit status delete", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
