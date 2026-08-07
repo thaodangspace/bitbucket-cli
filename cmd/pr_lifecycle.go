@@ -57,70 +57,72 @@ func resolvePRContext(cmd *cobra.Command, args []string) (selector.PullRequestSe
 	}
 
 	branch := selected.Branch
-	if branch == "" {
+	omitted := branch == ""
+	if omitted {
 		branch, err = currentGitBranch()
 		if err != nil {
 			return selected, repoContext{}, err
 		}
 	}
+	parts := []string{fmt.Sprintf("source.branch.name=%q", branch)}
+	if omitted {
+		parts = append(parts, `state="OPEN"`)
+	}
+	if remotes, remoteErr := gitRunner.Remotes(ctx(cmd)); remoteErr == nil {
+		if sourceRepo, ok := trackedSourceRepository(ctx(cmd), remotes); ok {
+			parts = append(parts, fmt.Sprintf("source.repository.full_name=%q", sourceRepo.Workspace+"/"+sourceRepo.Repo))
+		}
+	}
 	q := url.Values{
-		"q":       {fmt.Sprintf("source.branch.name=%q", branch)},
+		"q":       {strings.Join(parts, " AND ")},
 		"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)},
 	}
 	values, err := client.PaginateAll(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, q.Encode()), bitbucket.DefaultMaxPages)
 	if err != nil {
 		return selected, repoContext{}, err
 	}
+	if len(values) == 0 && len(parts) > 1 {
+		fallback := []string{fmt.Sprintf("source.branch.name=%q", branch)}
+		if omitted {
+			fallback = append(fallback, `state="OPEN"`)
+		}
+		fallbackQuery := url.Values{"q": {strings.Join(fallback, " AND ")}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
+		values, err = client.PaginateAll(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, fallbackQuery.Encode()), bitbucket.DefaultMaxPages)
+		if err != nil {
+			return selected, repoContext{}, err
+		}
+	}
+	if len(values) == 0 && omitted {
+		if commits, ok := gitRunner.(gitCommit); ok {
+			if commit, commitErr := commits.CurrentCommit(ctx(cmd)); commitErr == nil {
+				values, err = pullRequestsForCommit(ctx(cmd), client, base, commit)
+				if err != nil {
+					return selected, repoContext{}, err
+				}
+			}
+		}
+	}
 	if len(values) == 0 {
 		return selected, repoContext{}, fmt.Errorf("no pull request found for source branch %q", branch)
 	}
 
-	candidates := make([]map[string]any, 0, len(values))
-	for _, raw := range values {
-		var item map[string]any
-		if err := json.Unmarshal(raw, &item); err != nil {
-			return selected, repoContext{}, err
-		}
-		candidates = append(candidates, item)
-	}
-	chosen := -1
-	if len(candidates) == 1 {
-		chosen = 0
-	} else {
-		var repo struct {
-			MainBranch struct {
-				Name string `json:"name"`
-			} `json:"mainbranch"`
-		}
-		if err := client.Request(ctx(cmd), base, bitbucket.RequestOptions{}, &repo); err == nil && repo.MainBranch.Name != "" {
-			for i, candidate := range candidates {
-				state, _ := candidate["state"].(string)
-				destination := ""
-				if d, ok := candidate["destination"].(map[string]any); ok {
-					if b, ok := d["branch"].(map[string]any); ok {
-						destination, _ = b["name"].(string)
-					}
-				}
-				if strings.EqualFold(state, "OPEN") && destination == repo.MainBranch.Name {
-					if chosen != -1 {
-						chosen = -2
-						break
-					}
-					chosen = i
-				}
+	if len(values) > 1 {
+		candidates := make([]string, 0, len(values))
+		for _, raw := range values {
+			var item map[string]any
+			if err := json.Unmarshal(raw, &item); err != nil {
+				return selected, repoContext{}, err
 			}
+			title, _ := item["title"].(string)
+			candidates = append(candidates, fmt.Sprintf("#%s %q", fmt.Sprint(numberValue(item["id"])), title))
 		}
+		return selected, repoContext{}, fmt.Errorf("ambiguous pull request selector for branch %q; candidates: %s", branch, strings.Join(candidates, ", "))
 	}
-	if chosen < 0 {
-		ids := make([]string, 0, len(candidates))
-		for _, candidate := range candidates {
-			if id, ok := candidate["id"]; ok {
-				ids = append(ids, "#"+fmt.Sprint(numberValue(id)))
-			}
-		}
-		return selected, repoContext{}, fmt.Errorf("ambiguous pull request selector for branch %q; candidates: %s", branch, strings.Join(ids, ", "))
+	var candidate map[string]any
+	if err := json.Unmarshal(values[0], &candidate); err != nil {
+		return selected, repoContext{}, err
 	}
-	id, ok := candidates[chosen]["id"]
+	id, ok := candidate["id"]
 	if !ok {
 		return selected, repoContext{}, fmt.Errorf("selected pull request has no ID")
 	}

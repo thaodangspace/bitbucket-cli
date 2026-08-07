@@ -132,18 +132,6 @@ func parsePullRequestSelector(arg string) (selector.PullRequestSelector, error) 
 	return selected, nil
 }
 
-func currentGitBranch() (string, error) {
-	out, err := exec.Command("git", "branch", "--show-current").Output()
-	if err != nil {
-		return "", fmt.Errorf("resolve current git branch: %w", err)
-	}
-	branch := strings.TrimSpace(string(out))
-	if branch == "" {
-		return "", fmt.Errorf("could not determine current git branch")
-	}
-	return branch, nil
-}
-
 func parsePositiveID(label, arg string) (int, error) {
 	id, err := strconv.Atoi(strings.TrimSpace(arg))
 	if err != nil || id <= 0 {

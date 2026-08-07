@@ -216,6 +216,16 @@ Upload files and link them from a pull request comment
 
 Flags: `--file` — Local file to upload (repeatable, required); `--message` — Optional markdown text before the attachment links
 
+## `pr checkout [<selector>]`
+
+Check out a pull request locally
+
+- Classification: **write**
+- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr checkout [<selector>]`
+
+Flags: `--branch` — Local branch name (defaults to the pull request source branch); `--detach` — Check out the source commit without creating a local branch; `--force` — Allow resetting an existing or diverged local branch; `--recurse-submodules` — Initialize and update submodules recursively
+
 ## `pr checks [<selector>]`
 
 Show pull request commit checks
@@ -297,6 +307,17 @@ Create a new pull request
 - Example: `bitbucket-cli pr create`
 
 Flags: `--close-source-branch` — Close the source branch when the PR is merged; `--description-file` — Read description from file (- for stdin); `--description` — Description (markdown); `--destination` — Destination branch name (defaults to the repo main branch); `--source` — Source branch name (required); `--title` — Pull request title (required)
+
+## `pr current`
+
+Find the open pull request for the current branch
+
+- Classification: **read**
+- Required scopes: `read:pullrequest:bitbucket`
+- Example: `bitbucket-cli pr current`
+- JSON fields: `id,title,state,author,source,destination,reviewers`
+
+Flags: `--web` — Open the current branch pull request in a browser
 
 ## `pr decline [<selector>]`
 
