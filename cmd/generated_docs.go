@@ -51,7 +51,7 @@ func GenerateCommandMarkdown() string {
 
 func jsonFieldsForCommand(name string) string {
 	switch {
-	case strings.HasPrefix(name, "pr list"), strings.HasPrefix(name, "pr get"), strings.HasPrefix(name, "pr view"), strings.HasPrefix(name, "pr status"):
+	case strings.HasPrefix(name, "pr list"), strings.HasPrefix(name, "pr get"), strings.HasPrefix(name, "pr view"), strings.HasPrefix(name, "pr status"), strings.HasPrefix(name, "pr current"):
 		return "id,title,state,author,source,destination,reviewers"
 	case strings.HasPrefix(name, "branch list"):
 		return "name,target,links"
@@ -76,7 +76,7 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
 	}
-	for _, write := range []string{"pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
