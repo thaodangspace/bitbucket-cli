@@ -68,6 +68,7 @@ export BITBUCKET_API_TOKEN="your-atlassian-api-token"
 export BITBUCKET_DEFAULT_WORKSPACE="workspace-slug"   # optional
 export BITBUCKET_DEFAULT_REPO="repository-slug"        # optional
 export BITBUCKET_TOKEN_TYPE="api"                       # optional: api|access|oauth
+export BITBUCKET_CLONE_PROTOCOL="https"                 # optional: https|ssh
 ```
 
 ### Config file
@@ -82,6 +83,7 @@ email: you@example.com
 token_type: api
 default_workspace: workspace-slug   # optional
 default_repo: repository-slug       # optional
+clone_protocol: https                # optional: https|ssh
 ```
 
 All keys are optional; environment variables take precedence over file values.
@@ -106,7 +108,9 @@ the required scope for the endpoint.
 
 If `BITBUCKET_DEFAULT_WORKSPACE`/`BITBUCKET_DEFAULT_REPO` are unset and you run
 inside a git repository whose `origin` points at `bitbucket.org`, the workspace
-and repo are auto-detected. Override per command with `--workspace`/`--repo`.
+and repo are auto-detected. A local `bitbucket-cli.repository` git config set by
+`repo set-default` takes precedence over the remote. Override per command with
+`--workspace`/`--repo`.
 
 ## Commands
 
@@ -121,7 +125,16 @@ and repo are auto-detected. Override per command with `--workspace`/`--repo`.
 | `config get <key>` | Print a stored config value |
 | `config list` | Show stored config (API token redacted) |
 | `config path` | Print the config file path |
-| `repo get [--web]` | Repository details |
+| `repo list [<workspace>]` | Discover repositories with filters |
+| `repo view [<workspace/repo>] [--readme] [--web]` | Repository details and README |
+| `repo create <name>` | Create a repository (write) |
+| `repo edit [<workspace/repo>]` | Update selected repository fields (write) |
+| `repo delete [<workspace/repo>] --yes` | Delete a repository (write) |
+| `repo fork [<workspace/repo>]` | Fork a repository (write) |
+| `repo clone <workspace/repo|url>` | Clone a repository |
+| `repo browse [<workspace/repo>] [<path>]` | Open a repository path in a browser |
+| `repo set-default [<workspace/repo>]` | Set a local repository default |
+| `repo get [--web]` | Compatibility alias for `repo view` |
 | `pr list [--state OPEN\|MERGED\|DECLINED\|SUPERSEDED] [--limit N]` | List pull requests |
 | `pr get [<id-or-url>] [--web]` | One pull request |
 | `pr comments <id> [--limit N]` | Pull request comments |

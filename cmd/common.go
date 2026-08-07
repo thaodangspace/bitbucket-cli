@@ -86,6 +86,19 @@ func resolveRepoFor(cfg config.Config, selected *selector.Repository) (config.Re
 		}
 		return ref, fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.RepoSlug)), nil
 	}
+	// A local git preference is deliberately checked at command resolution
+	// time. Config.LoadConfig also discovers the matching remote, but the
+	// local preference must win over that global/remote fallback.
+	if strings.TrimSpace(flagWorkspace) == "" && strings.TrimSpace(flagRepo) == "" {
+		if value, ok := currentLocalDefault(); ok {
+			if parsed, err := parseRepositorySelector(value); err == nil {
+				return config.ResolvedRepoRef{Workspace: parsed.Workspace, RepoSlug: parsed.RepoSlug}, fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(parsed.Workspace), bitbucket.EncodePathSegment(parsed.RepoSlug)), nil
+			}
+		}
+		if remote, ok := config.GitRepoRefFrom(""); ok {
+			return config.ResolvedRepoRef{Workspace: remote.Workspace, RepoSlug: remote.RepoSlug}, fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(remote.Workspace), bitbucket.EncodePathSegment(remote.RepoSlug)), nil
+		}
+	}
 	ref, err := config.ResolveRepoRef(config.RepoRef{Workspace: flagWorkspace, RepoSlug: flagRepo}, cfg)
 	if err != nil {
 		return config.ResolvedRepoRef{}, "", err

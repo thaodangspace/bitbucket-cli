@@ -163,5 +163,5 @@ var (
 	CommitFields      = fields("author", "author.display_name", "date", "hash", "links", "message", "repository")
 	BranchFields      = fields("links", "merge_strategies", "name", "target", "target.hash", "target.author", "type")
 	PipelineFields    = fields("build_number", "completed_on", "created_on", "creator", "creator.display_name", "duration_in_seconds", "links", "repository", "state", "state.name", "state.result", "state.result.name", "steps", "steps.name", "steps.state", "target", "target.ref_name", "target.commit", "target.commit.hash", "trigger", "trigger.name", "uuid")
-	RepoFields        = fields("description", "full_name", "is_private", "links", "mainbranch", "mainbranch.name", "name", "owner", "owner.display_name", "project", "scm", "size", "updated_on", "uuid", "website")
+	RepoFields        = fields("description", "fork_policy", "full_name", "has_issues", "has_wiki", "is_fork", "is_private", "links", "links.clone", "links.clone.href", "links.clone.name", "mainbranch", "mainbranch.name", "name", "owner", "owner.display_name", "parent", "project", "scm", "size", "updated_on", "uuid", "website")
 )

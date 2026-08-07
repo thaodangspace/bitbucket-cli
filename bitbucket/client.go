@@ -55,9 +55,32 @@ func RequiredScopesFor(method, path string) string {
 		return "repository:read"
 	case strings.Contains(path, "/pipeline"):
 		return "pipeline:read"
+	case strings.Contains(path, "/repositories/") && strings.HasSuffix(strings.Split(strings.Split(path, "?")[0], "/repositories/")[1], "/forks") && method == http.MethodPost:
+		return "read:repository:bitbucket and write:repository:bitbucket"
+	case repositoryResourcePath(path) && method == http.MethodPost:
+		return "admin:repository:bitbucket"
+	case repositoryResourcePath(path) && method == http.MethodPut:
+		return "admin:repository:bitbucket"
+	case repositoryResourcePath(path) && method == http.MethodDelete:
+		return "delete:repository:bitbucket"
+	case strings.Contains(path, "/repositories") && method != http.MethodGet:
+		return "write:repository:bitbucket"
+	case method == http.MethodGet:
+		return "read:repository:bitbucket"
 	default:
-		return "repository:read"
+		return "admin:repository:bitbucket"
 	}
+}
+
+func repositoryResourcePath(path string) bool {
+	base := strings.Split(path, "?")[0]
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(base, APIBaseURL), "/"), "/")
+	for i := range parts {
+		if parts[i] == "repositories" {
+			return len(parts)-i-1 == 2
+		}
+	}
+	return false
 }
 
 // HTTPError is a normalized non-2xx response from Bitbucket.

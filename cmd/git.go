@@ -152,6 +152,13 @@ func (g execGit) AddRemote(ctx context.Context, name, remoteURL string) error {
 	return nil
 }
 
+func (g execGit) RenameRemote(ctx context.Context, oldName, newName string) error {
+	if _, err := g.run(ctx, "remote", "rename", oldName, newName); err != nil {
+		return fmt.Errorf("rename git remote %q to %q: %w", oldName, newName, err)
+	}
+	return nil
+}
+
 func (g execGit) BranchStatus(ctx context.Context, branch string) (bool, string, error) {
 	cmd := exec.CommandContext(ctx, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
 	if err := cmd.Run(); err != nil {

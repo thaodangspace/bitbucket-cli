@@ -35,6 +35,7 @@ type Config struct {
 	Auth             auth.Provider
 	DefaultWorkspace string
 	DefaultRepo      string
+	CloneProtocol    string
 }
 
 // RepoRef is an unresolved workspace/repo reference, typically from CLI flags.
@@ -59,10 +60,11 @@ type FileConfig struct {
 	TokenType        string `yaml:"token_type,omitempty"`
 	DefaultWorkspace string `yaml:"default_workspace,omitempty"`
 	DefaultRepo      string `yaml:"default_repo,omitempty"`
+	CloneProtocol    string `yaml:"clone_protocol,omitempty"`
 }
 
 // FileKeys are the keys settable in the config file, in display order.
-var FileKeys = []string{"email", "token_type", "api_token", "default_workspace", "default_repo"}
+var FileKeys = []string{"email", "token_type", "api_token", "default_workspace", "default_repo", "clone_protocol"}
 
 func (fc *FileConfig) field(key string) (*string, error) {
 	switch key {
@@ -76,6 +78,8 @@ func (fc *FileConfig) field(key string) (*string, error) {
 		return &fc.DefaultWorkspace, nil
 	case "default_repo":
 		return &fc.DefaultRepo, nil
+	case "clone_protocol":
+		return &fc.CloneProtocol, nil
 	default:
 		return nil, fmt.Errorf("unknown config key %q (valid keys: %s)", key, strings.Join(FileKeys, ", "))
 	}
@@ -252,6 +256,10 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 
 	workspace := firstNonEmpty(env["BITBUCKET_DEFAULT_WORKSPACE"], file.DefaultWorkspace)
 	repo := firstNonEmpty(env["BITBUCKET_DEFAULT_REPO"], file.DefaultRepo)
+	cloneProtocol := firstNonEmpty(env["BITBUCKET_CLONE_PROTOCOL"], file.CloneProtocol)
+	if cloneProtocol != "" && cloneProtocol != "https" && cloneProtocol != "ssh" {
+		return Config{}, fmt.Errorf("invalid clone protocol %q (use https or ssh)", cloneProtocol)
+	}
 
 	if workspace == "" || repo == "" {
 		if ref, ok := GitRepoRefFrom(gitCwd); ok {
@@ -272,6 +280,7 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 		Auth:             auth.ProviderFor(auth.TokenType(tokenType), email, token),
 		DefaultWorkspace: workspace,
 		DefaultRepo:      repo,
+		CloneProtocol:    cloneProtocol,
 	}, nil
 }
 
