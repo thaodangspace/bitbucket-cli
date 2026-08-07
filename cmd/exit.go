@@ -21,6 +21,11 @@ func exitCode(err error) int {
 		}
 	}
 	message := strings.ToLower(err.Error())
+	// Checks use a distinct code so scripts can distinguish an unfinished
+	// review from a completed check failure.
+	if strings.Contains(message, "checks are pending") {
+		return 8
+	}
 	if strings.Contains(message, "authentication") || strings.Contains(message, "credential") || strings.Contains(message, "token") {
 		return 3
 	}

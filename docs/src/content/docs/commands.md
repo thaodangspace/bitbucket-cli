@@ -52,7 +52,12 @@ explicit flags, configured defaults, or the local Bitbucket git remote.
 ```sh
 bitbucket-cli pr list [--state OPEN|MERGED|DECLINED|SUPERSEDED] [--limit N]
 bitbucket-cli pr list [--author ACCOUNT_ID|--mine]
-bitbucket-cli pr get [<id-or-url>] [--web]
+bitbucket-cli pr view [<selector>] [--comments] [--activity] [--web]
+bitbucket-cli pr get [<id-or-url>] [--web] # compatibility alias behavior
+bitbucket-cli pr diff [<selector>] [--patch|--stat|--name-only]
+bitbucket-cli pr checks [<selector>] [--watch]
+bitbucket-cli pr conflicts [<selector>]
+bitbucket-cli pr status [--mine|--review-requested]
 bitbucket-cli pr comments <id> [--limit N]
 bitbucket-cli pr commits <id> [--limit N]
 ```
@@ -81,6 +86,9 @@ bitbucket-cli pr task delete <id> <task-id> --yes
 bitbucket-cli pr create --source BRANCH --title "Title" [options]
 bitbucket-cli pr update <id> [--title TITLE] [--description TEXT|--description-file FILE]
 bitbucket-cli pr attach <id> --file PATH [--file PATH ...] [--message TEXT]
+bitbucket-cli pr merge [<selector>] [--strategy merge_commit|squash|fast_forward]
+bitbucket-cli pr decline [<selector>] [--message TEXT] [--yes]
+bitbucket-cli pr reopen [<selector>]
 ```
 
 `pr create` also accepts `--destination`, `--description-file` (`-` means
@@ -100,8 +108,8 @@ require `--yes`, and task updates preserve fields that were not specified.
 :::danger[Write safety]
 Do not run `pr comment`, `pr review`, `pr unapprove`,
 `pr remove-change-request`, `pr thread`, `pr task create/update/delete`,
-`pr create`, `pr update`, or `pr attach` unless the user explicitly asked for the
-remote change.
+`pr create`, `pr update`, `pr attach`, `pr merge`, `pr decline`, or `pr reopen`
+unless the user explicitly asked for the remote change.
 :::
 
 ## Branches and pipelines

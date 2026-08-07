@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
 	"github.com/thaodangspace/bitbucket-cli/output"
@@ -22,11 +23,13 @@ var prCmd = &cobra.Command{
 
 func init() {
 	var (
-		listState  string
-		listLimit  int
-		listAuthor string
-		listMine   bool
-		prGetWeb   bool
+		listState      string
+		listLimit      int
+		listAuthor     string
+		listMine       bool
+		prGetWeb       bool
+		prViewComments bool
+		prViewActivity bool
 	)
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -78,10 +81,23 @@ func init() {
 	listCmd.Flags().BoolVar(&listMine, "mine", false, "Filter to pull requests authored by the authenticated user")
 
 	getCmd := &cobra.Command{
-		Use:   "get [id|url]",
-		Short: "Get a pull request by ID, URL, or current branch",
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "view [<selector>]",
+		Aliases: []string{"get"},
+		Short:   "View a pull request by ID, URL, or current branch",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			useView := cmd.CalledAs() == "view"
+			if cmd.CalledAs() == "get" {
+				useView = len(args) == 0 || prViewComments || prViewActivity
+				if len(args) == 1 {
+					if _, selectorErr := parsePullRequestSelector(args[0]); selectorErr == nil || strings.Contains(args[0], "/") {
+						useView = true
+					}
+				}
+			}
+			if useView {
+				return runPRView(cmd, args, prViewComments, prViewActivity, prGetWeb)
+			}
 			var selected selector.PullRequestSelector
 			var err error
 			if len(args) == 1 {
@@ -99,9 +115,13 @@ func init() {
 				return fail(err)
 			}
 			if selected.ID == 0 {
-				branch, berr := currentGitBranch()
-				if berr != nil {
-					return fail(berr)
+				branch := selected.Branch
+				if branch == "" {
+					var berr error
+					branch, berr = currentGitBranch()
+					if berr != nil {
+						return fail(berr)
+					}
 				}
 				q := url.Values{"q": {fmt.Sprintf("source.branch.name=%q", branch)}, "pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
 				values, perr := client.Paginate(ctx(cmd), fmt.Sprintf("%s/pullrequests?%s", base, q.Encode()), 1, bitbucket.DefaultMaxPages)
@@ -137,6 +157,8 @@ func init() {
 		},
 	}
 	getCmd.Flags().BoolVar(&prGetWeb, "web", false, "Open the pull request in a browser")
+	getCmd.Flags().BoolVar(&prViewComments, "comments", false, "Include pull request comments")
+	getCmd.Flags().BoolVar(&prViewActivity, "activity", false, "Include pull request activity")
 
 	var commentsLimit int
 	commentsCmd := &cobra.Command{
