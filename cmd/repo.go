@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,11 +24,14 @@ import (
 // responses frequently, while these fields are the ones needed by local
 // workflows and by the mutation commands.
 type repoObject struct {
-	Workspace string `json:"-"`
-	Slug      string `json:"-"`
-	Name      string `json:"name,omitempty"`
-	FullName  string `json:"full_name,omitempty"`
-	Main      struct {
+	Workspace     string `json:"-"`
+	Slug          string `json:"slug,omitempty"`
+	Name          string `json:"name,omitempty"`
+	FullName      string `json:"full_name,omitempty"`
+	WorkspaceInfo struct {
+		Slug string `json:"slug"`
+	} `json:"workspace,omitempty"`
+	Main struct {
 		Name string `json:"name"`
 	} `json:"mainbranch,omitempty"`
 	Links struct {
@@ -35,6 +39,9 @@ type repoObject struct {
 			Name string `json:"name"`
 			Href string `json:"href"`
 		} `json:"clone"`
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
 	} `json:"links,omitempty"`
 }
 
@@ -87,6 +94,78 @@ func requestRepo(ctx context.Context, client *bitbucket.Client, ref config.Resol
 	return raw, nil
 }
 
+func canonicalRepositoryRef(raw json.RawMessage) (config.ResolvedRepoRef, error) {
+	var repo repoObject
+	if err := json.Unmarshal(raw, &repo); err != nil {
+		return config.ResolvedRepoRef{}, err
+	}
+	workspace, slug := strings.TrimSpace(repo.WorkspaceInfo.Slug), strings.TrimSpace(repo.Slug)
+	if workspace == "" || slug == "" {
+		parts := strings.Split(strings.TrimSuffix(strings.TrimSpace(repo.FullName), ".git"), "/")
+		if len(parts) == 2 {
+			if workspace == "" {
+				workspace = parts[0]
+			}
+			if slug == "" {
+				slug = parts[1]
+			}
+		}
+	}
+	if (workspace == "" || slug == "") && repo.Links.Self.Href != "" {
+		if parsed, err := selector.RepositorySelector(repo.Links.Self.Href); err == nil {
+			workspace, slug = parsed.Workspace, parsed.Repo
+		}
+	}
+	if workspace == "" || slug == "" {
+		return config.ResolvedRepoRef{}, fmt.Errorf("Bitbucket fork response did not include a canonical workspace and repository slug")
+	}
+	return config.ResolvedRepoRef{Workspace: workspace, RepoSlug: slug}, nil
+}
+
+func repositorySourcePath(ref config.ResolvedRepoRef, branch, filePath string) string {
+	parts := []string{repoPath(ref), "src", bitbucket.EncodePathSegment(branch)}
+	for _, part := range strings.Split(strings.Trim(filePath, "/"), "/") {
+		if part != "" {
+			parts = append(parts, bitbucket.EncodePathSegment(part))
+		}
+	}
+	return strings.Join(parts, "/")
+}
+
+func findReadmePath(values []json.RawMessage) (string, error) {
+	var candidates []string
+	for _, raw := range values {
+		var entry struct {
+			Path string `json:"path"`
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(raw, &entry) != nil || entry.Path == "" || strings.Contains(strings.Trim(entry.Path, "/"), "/") {
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(entry.Path))
+		if name == "readme" || name == "readme.md" || name == "readme.rst" || name == "readme.txt" || strings.HasPrefix(name, "readme.") {
+			candidates = append(candidates, entry.Path)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("repository does not contain a README file at its root")
+	}
+	preference := map[string]int{"readme.md": 0, "readme.rst": 1, "readme.txt": 2, "readme": 3}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left, right := strings.ToLower(candidates[i]), strings.ToLower(candidates[j])
+		li, lok := preference[left]
+		lj, jok := preference[right]
+		if lok && jok && li != lj {
+			return li < lj
+		}
+		if lok != jok {
+			return lok
+		}
+		return left < right
+	})
+	return candidates[0], nil
+}
+
 func cloneURL(raw json.RawMessage, ref config.ResolvedRepoRef, protocol string) (string, error) {
 	var repo repoObject
 	if err := json.Unmarshal(raw, &repo); err != nil {
@@ -107,7 +186,7 @@ func cloneURL(raw json.RawMessage, ref config.ResolvedRepoRef, protocol string) 
 	return fmt.Sprintf("https://bitbucket.org/%s/%s.git", url.PathEscape(ref.Workspace), url.PathEscape(ref.RepoSlug)), nil
 }
 
-func currentLocalDefault() (string, bool) {
+var localDefaultReader = func() (string, bool) {
 	out, err := exec.Command("git", "config", "--local", "--get", "bitbucket-cli.repository").Output()
 	if err != nil {
 		return "", false
@@ -115,6 +194,8 @@ func currentLocalDefault() (string, bool) {
 	value := strings.TrimSpace(string(out))
 	return value, value != ""
 }
+
+func currentLocalDefault() (string, bool) { return localDefaultReader() }
 
 func setLocalDefault(value string) error {
 	cmd := exec.Command("git", "config", "--local", "bitbucket-cli.repository", value)
@@ -239,8 +320,16 @@ func init() {
 			if branch == "" {
 				branch = "main"
 			}
-			path := fmt.Sprintf("%s/src/%s/README", repoPath(ref), bitbucket.EncodePathSegment(branch))
-			resp, err := client.Do(ctx(cmd), path, bitbucket.RequestOptions{Headers: http.Header{"Accept": {"text/plain"}}})
+			rootPath := fmt.Sprintf("%s/?pagelen=%d", repositorySourcePath(ref, branch, ""), bitbucket.DefaultPageLen)
+			values, err := client.PaginateAll(ctx(cmd), rootPath, bitbucket.DefaultMaxPages)
+			if err != nil {
+				return fail(err)
+			}
+			readmePath, err := findReadmePath(values)
+			if err != nil {
+				return fail(err)
+			}
+			resp, err := client.Do(ctx(cmd), repositorySourcePath(ref, branch, readmePath), bitbucket.RequestOptions{Headers: http.Header{"Accept": {"text/plain"}}})
 			if err != nil {
 				return fail(err)
 			}
@@ -289,7 +378,8 @@ func init() {
 				body["mainbranch"] = map[string]string{"name": createMainBranch}
 			}
 			var raw json.RawMessage
-			if err := client.Request(ctx(cmd), fmt.Sprintf("/repositories/%s", bitbucket.EncodePathSegment(workspace)), bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
+			createPath := fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(workspace), bitbucket.EncodePathSegment(name))
+			if err := client.Request(ctx(cmd), createPath, bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
 				return fail(err)
 			}
 			ref := config.ResolvedRepoRef{Workspace: workspace, RepoSlug: name}
@@ -443,20 +533,12 @@ func init() {
 			if err := client.Request(ctx(cmd), repoPath(ref)+"/forks", bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
 				return fail(err)
 			}
-			var forkRef config.ResolvedRepoRef
-			if err := json.Unmarshal(raw, &forkRef); err != nil || forkRef.RepoSlug == "" {
-				var obj repoObject
-				_ = json.Unmarshal(raw, &obj)
-				forkRef = config.ResolvedRepoRef{Workspace: forkWorkspace, RepoSlug: forkName}
-				if forkRef.Workspace == "" {
-					forkRef.Workspace = ref.Workspace
-				}
-				if forkRef.RepoSlug == "" {
-					forkRef.RepoSlug = obj.Name
-					if forkRef.RepoSlug == "" {
-						forkRef.RepoSlug = ref.RepoSlug
-					}
-				}
+			// The repository response is authoritative. Never derive a slug from
+			// the display name: Bitbucket may slugify it differently and the
+			// fork may live in a different workspace.
+			forkRef, err := canonicalRepositoryRef(raw)
+			if err != nil {
+				return fail(err)
 			}
 			if forkClone {
 				protocol := protocolFor(cfg, forkProtocol)

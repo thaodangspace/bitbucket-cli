@@ -76,13 +76,22 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "repo create", "repo edit", "repo delete", "repo fork", "repo set-default", "auth login", "auth logout", "alias set", "alias delete"} {
+	if name == "repo create" || strings.HasPrefix(name, "repo create ") || name == "repo edit [<workspace/repo>]" || strings.HasPrefix(name, "repo edit ") {
+		return "admin", "admin:repository:bitbucket"
+	}
+	if name == "repo delete [<workspace/repo>]" || strings.HasPrefix(name, "repo delete ") {
+		return "delete", "delete:repository:bitbucket"
+	}
+	if name == "repo fork [<workspace/repo>]" || strings.HasPrefix(name, "repo fork ") {
+		return "write", "read:repository:bitbucket, write:repository:bitbucket"
+	}
+	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
+		return "write", "none (local git configuration)"
+	}
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
-			}
-			if strings.HasPrefix(name, "repo ") {
-				return "write", "read:repository:bitbucket, write:repository:bitbucket"
 			}
 			return "write", scope
 		}

@@ -531,8 +531,8 @@ Flags: `--protocol` — Clone protocol: https or ssh (defaults to config)
 
 Create a repository
 
-- Classification: **write**
-- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
 - Example: `bitbucket-cli repo create <name>`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -542,8 +542,8 @@ Flags: `--clone` — Clone after creation; `--description` — Repository descri
 
 Delete a repository
 
-- Classification: **write**
-- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Classification: **delete**
+- Required scopes: `delete:repository:bitbucket`
 - Example: `bitbucket-cli repo delete [<workspace/repo>]`
 
 Flags: `--yes` — Confirm deletion
@@ -552,8 +552,8 @@ Flags: `--yes` — Confirm deletion
 
 Edit a repository
 
-- Classification: **write**
-- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
 - Example: `bitbucket-cli repo edit [<workspace/repo>]`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -586,7 +586,7 @@ Flags: `--fork` — Only fork repositories; `--limit` — Maximum repositories t
 Set the local repository default
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Required scopes: `none (local git configuration)`
 - Example: `bitbucket-cli repo set-default [<workspace/repo>]`
 
 Flags: `--value` — Repository selector (normally use the positional argument)
