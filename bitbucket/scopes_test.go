@@ -15,6 +15,13 @@ func TestRequiredScopesForRepositoryWorkflows(t *testing.T) {
 		{http.MethodPost, "/repositories/team/repo/forks", "read:repository:bitbucket and write:repository:bitbucket"},
 		{http.MethodGet, "/repositories/team/repo/branch-restrictions", "admin:repository:bitbucket"},
 		{http.MethodGet, "/repositories/team/repo/branching-model/settings", "admin:repository:bitbucket"},
+		{http.MethodGet, "/repositories/team/repo/commit/abc/statuses", "read:repository:bitbucket"},
+		{http.MethodPost, "/repositories/team/repo/commit/abc/statuses/build", "read:repository:bitbucket and write:repository:bitbucket"},
+		{http.MethodGet, "/repositories/team/repo/commit/abc/reports", "read:repository:bitbucket"},
+		{http.MethodPut, "/repositories/team/repo/commit/abc/reports/scan", "read:repository:bitbucket and write:repository:bitbucket"},
+		{http.MethodPost, "/repositories/team/repo/commit/abc/approve", "read:repository:bitbucket and write:repository:bitbucket"},
+		{http.MethodDelete, "/repositories/team/repo/commit/abc/approve", "read:repository:bitbucket and write:repository:bitbucket"},
+		{http.MethodPost, "/repositories/team/repo/commit/abc/comments", "read:repository:bitbucket and write:repository:bitbucket"},
 	}
 	for _, tt := range tests {
 		if got := RequiredScopesFor(tt.method, tt.path); got != tt.want {

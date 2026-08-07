@@ -82,7 +82,7 @@ func jsonFieldsForCommand(name string) string {
 	case strings.HasPrefix(name, "commit status"):
 		return "key,state,name,description,url,refname,created_on,updated_on"
 	case strings.HasPrefix(name, "report"):
-		return "uuid,title,details,result,reporter,report_type,data,created_at,updated_at"
+		return "uuid,title,details,result,reporter,report_type,data,created_on,updated_on"
 	case strings.HasPrefix(name, "annotation"):
 		return "external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link"
 	case strings.HasPrefix(name, "repo list"), strings.HasPrefix(name, "repo view"), strings.HasPrefix(name, "repo get"), strings.HasPrefix(name, "repo create"), strings.HasPrefix(name, "repo edit"), strings.HasPrefix(name, "repo fork"):
@@ -101,10 +101,10 @@ func commandMetadata(name string) (classification, scope string) {
 		scope = "read:pipeline:bitbucket"
 	}
 	if strings.HasPrefix(name, "commit status") {
-		scope = "read:commit-status:bitbucket"
+		scope = "read:repository:bitbucket"
 	}
 	if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
-		scope = "read:insights:bitbucket"
+		scope = "read:repository:bitbucket"
 	}
 	if strings.HasPrefix(name, "branching-model edit") || strings.HasPrefix(name, "branch-restriction create") || strings.HasPrefix(name, "branch-restriction edit") || strings.HasPrefix(name, "branch-restriction delete") || strings.HasPrefix(name, "default-reviewer add") || strings.HasPrefix(name, "default-reviewer remove") || name == "repo create" || strings.HasPrefix(name, "repo create ") || name == "repo edit [<workspace/repo>]" || strings.HasPrefix(name, "repo edit ") {
 		return "admin", "admin:repository:bitbucket"
@@ -118,19 +118,19 @@ func commandMetadata(name string) (classification, scope string) {
 	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
 		return "write", "none (local git configuration)"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "commit status delete", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
 			}
 			if strings.HasPrefix(name, "commit status") {
-				return "write", "write:commit-status:bitbucket"
+				return "write", "read:repository:bitbucket and write:repository:bitbucket"
 			}
 			if strings.HasPrefix(name, "commit comment") || strings.HasPrefix(name, "commit approve") || strings.HasPrefix(name, "commit unapprove") {
-				return "write", "write:repository:bitbucket"
+				return "write", "read:repository:bitbucket and write:repository:bitbucket"
 			}
 			if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
-				return "write", "write:insights:bitbucket"
+				return "write", "read:repository:bitbucket and write:repository:bitbucket"
 			}
 			return "write", scope
 		}

@@ -169,6 +169,6 @@ var (
 	PipelineFields       = fields("build_number", "completed_on", "created_on", "creator", "creator.display_name", "duration_in_seconds", "links", "repository", "state", "state.name", "state.result", "state.result.name", "steps", "steps.name", "steps.state", "target", "target.ref_name", "target.commit", "target.commit.hash", "trigger", "trigger.name", "uuid")
 	RepoFields           = fields("description", "fork_policy", "full_name", "has_issues", "has_wiki", "is_fork", "is_private", "links", "links.clone", "links.clone.href", "links.clone.name", "mainbranch", "mainbranch.name", "name", "owner", "owner.display_name", "parent", "project", "scm", "size", "updated_on", "uuid", "website")
 	CommitStatusFields   = fields("created_on", "description", "key", "links", "name", "refname", "state", "updated_on", "url", "uuid")
-	ReportFields         = fields("created_at", "details", "external_id", "link", "logo_url", "result", "reporter", "report_type", "title", "updated_at", "uuid", "data")
-	AnnotationFields     = fields("annotation_type", "external_id", "file_path", "line", "link", "message", "path", "severity", "summary", "result", "start_line", "end_line", "created_at", "updated_at")
+	ReportFields         = fields("created_on", "details", "external_id", "link", "logo_url", "result", "reporter", "report_type", "title", "updated_on", "uuid", "data")
+	AnnotationFields     = fields("annotation_type", "external_id", "file_path", "line", "link", "message", "path", "severity", "summary", "result", "start_line", "end_line", "created_on", "updated_on")
 )

@@ -40,7 +40,7 @@ Set a command alias
 Manage Code Insights annotations
 
 - Classification: **read**
-- Required scopes: `read:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli annotation`
 - JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
 
@@ -49,7 +49,7 @@ Manage Code Insights annotations
 Delete a report annotation
 
 - Classification: **write**
-- Required scopes: `write:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli annotation delete <commit> <report-id> <annotation-id>`
 - JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
 
@@ -60,7 +60,7 @@ Flags: `--yes` — Confirm deletion
 List report annotations
 
 - Classification: **read**
-- Required scopes: `read:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli annotation list <commit> <report-id>`
 - JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
 
@@ -71,7 +71,7 @@ Flags: `--limit` — Maximum annotations to return
 Create or update report annotations
 
 - Classification: **write**
-- Required scopes: `write:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli annotation upsert <commit> <report-id>`
 
 > Warning: report payloads and annotations are visible to repository users with access; never include secrets.
@@ -297,7 +297,7 @@ Browse commits and commit checks
 Approve a commit
 
 - Classification: **write**
-- Required scopes: `write:repository:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit approve <commit>`
 
 ## `commit comment`
@@ -314,7 +314,7 @@ Manage commit comments
 Create a commit comment
 
 - Classification: **write**
-- Required scopes: `write:repository:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit comment create <commit>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -325,7 +325,7 @@ Flags: `--body-file` — Read the body from a file (- for stdin); `--body` — M
 Delete a commit comment
 
 - Classification: **write**
-- Required scopes: `write:repository:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit comment delete <commit> <comment-id>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -336,7 +336,7 @@ Flags: `--yes` — Confirm deletion
 Edit a commit comment
 
 - Classification: **write**
-- Required scopes: `write:repository:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit comment edit <commit> <comment-id>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -381,27 +381,16 @@ Flags: `--exclude` — Exclude commits reachable from this ref (repeatable); `--
 Manage commit build statuses
 
 - Classification: **read**
-- Required scopes: `read:commit-status:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli commit status`
 - JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
-
-## `commit status delete <commit> <key>`
-
-Delete a commit build status
-
-- Classification: **write**
-- Required scopes: `write:commit-status:bitbucket`
-- Example: `bitbucket-cli commit status delete <commit> <key>`
-- JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
-
-Flags: `--yes` — Confirm deletion
 
 ## `commit status list <commit>`
 
 List build statuses for a commit
 
 - Classification: **read**
-- Required scopes: `read:commit-status:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli commit status list <commit>`
 - JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
 
@@ -412,7 +401,7 @@ Flags: `--limit` — Maximum statuses to return
 Create or update a commit build status
 
 - Classification: **write**
-- Required scopes: `write:commit-status:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit status set <commit>`
 - JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
 
@@ -423,7 +412,7 @@ Flags: `--description` — Status description; `--key` — Unique status key; `-
 Remove your approval from a commit
 
 - Classification: **write**
-- Required scopes: `write:repository:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit unapprove <commit>`
 
 ## `commit view <commit>`
@@ -962,18 +951,18 @@ Flags: `--branch` — Branch or ref used for --readme; `--readme` — Print the 
 Manage Code Insights reports
 
 - Classification: **read**
-- Required scopes: `read:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli report`
-- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_at,updated_at`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
 ## `report delete <commit> <report-id>`
 
 Delete a Code Insights report
 
 - Classification: **write**
-- Required scopes: `write:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli report delete <commit> <report-id>`
-- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_at,updated_at`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
 Flags: `--yes` — Confirm deletion
 
@@ -982,9 +971,9 @@ Flags: `--yes` — Confirm deletion
 List reports for a commit
 
 - Classification: **read**
-- Required scopes: `read:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli report list <commit>`
-- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_at,updated_at`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
 Flags: `--limit` — Maximum reports to return
 
@@ -993,11 +982,11 @@ Flags: `--limit` — Maximum reports to return
 Create or update a Code Insights report
 
 - Classification: **write**
-- Required scopes: `write:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli report upsert <commit> <report-id>`
 
 > Warning: report payloads and annotations are visible to repository users with access; never include secrets.
-- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_at,updated_at`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
 Flags: `--data-file` — JSON report fields; `--details` — Report details; `--result` — Result: PASSED, FAILED, or PENDING; `--title` — Report title
 
@@ -1006,9 +995,9 @@ Flags: `--data-file` — JSON report fields; `--details` — Report details; `--
 View a Code Insights report
 
 - Classification: **read**
-- Required scopes: `read:insights:bitbucket`
+- Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli report view <commit> <report-id>`
-- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_at,updated_at`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
 ## `status`
 

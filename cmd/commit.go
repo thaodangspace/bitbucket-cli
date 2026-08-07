@@ -601,23 +601,7 @@ func addCommitStatusCommands(parent *cobra.Command) {
 	set.Flags().StringVar(&description, "description", "", "Status description")
 	set.Flags().StringVar(&target, "url", "", "Build target URL")
 	set.Flags().StringVar(&ref, "ref", "", "Reference name")
-	var yes bool
-	remove := &cobra.Command{Use: "delete <commit> <key>", Short: "Delete a commit build status", Long: "Delete a commit build status. This is a write operation and requires --yes in non-interactive mode.", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		if !yes {
-			return fail(fmt.Errorf("refusing to delete status without --yes"))
-		}
-		cc, err := newCommitContext(cmd, args[0], true)
-		if err != nil {
-			return fail(err)
-		}
-		path := commitPath(cc.base, cc.resolved) + "/statuses/build/" + bitbucket.EncodePathSegment(args[1])
-		if err := cc.client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
-			return fail(err)
-		}
-		return renderValue(map[string]any{"deleted": true, "key": args[1]}, nil, nil, false, "")
-	}}
-	remove.Flags().BoolVar(&yes, "yes", false, "Confirm deletion")
-	status.AddCommand(list, set, remove)
+	status.AddCommand(list, set)
 	parent.AddCommand(status)
 }
 
