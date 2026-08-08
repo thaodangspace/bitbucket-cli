@@ -609,7 +609,7 @@ func init() {
 
 	var applyFile, applyRepository, applyWorkspace string
 	var applyDryRun, applyPrune, applyYes, applyAllowPrivate, applyAllowHTTP, applyAllowUnknown, applyNoCache bool
-	applyCmd := &cobra.Command{Use: "apply --file <yaml|json>", Short: "Apply declarative webhook configuration", Long: "Apply webhook configuration. This is a write operation; --dry-run performs no mutations and --prune requires --yes.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	applyCmd := &cobra.Command{Use: "apply --file <yaml|json>", Short: "Apply declarative webhook configuration", Long: "Apply webhook configuration. This is a write operation; --dry-run performs no mutations and --prune requires --yes. " + capabilityHelp("webhook.apply"), Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		if applyFile == "" {
 			return fail(fmt.Errorf("--file is required"))
 		}
@@ -623,6 +623,11 @@ func init() {
 		}
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
+		}
+		if applyPrune && !applyDryRun {
+			if err = requireCapability(cfg, "webhook.delete"); err != nil {
+				return fail(err)
+			}
 		}
 		repository := firstNonEmptyCLI(applyRepository, flagRepository)
 		workspace := firstNonEmptyCLI(applyWorkspace, flagWorkspace)
@@ -1256,8 +1261,7 @@ func init() {
 	sshAdd.Flags().StringVar(&sshFile, "file", "", "OpenSSH public-key file, or - for stdin (required)")
 	sshAdd.Flags().StringVar(&sshLabel, "label", "", "Key label")
 	sshAdd.Flags().StringVar(&sshExpires, "expires", "", "Expiry date (YYYY-MM-DD) or RFC3339")
-	var sshEditUser, sshEditLabel, sshEditExpires string
-	var sshEditYes bool
+	var sshEditUser, sshEditLabel string
 	sshEdit := &cobra.Command{Use: "edit <id>", Short: "Edit an account SSH key", Long: "Edit an account SSH key. This is a write operation; only explicitly supplied fields change.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if sshEditUser != "" {
 			return fail(fmt.Errorf("writing another user's SSH keys is not implied; omit --user"))
@@ -1266,12 +1270,8 @@ func init() {
 		if err != nil {
 			return fail(err)
 		}
-		expires, err := expiryValue(sshEditExpires)
-		if err != nil {
-			return fail(err)
-		}
-		if !cmd.Flags().Changed("label") && !cmd.Flags().Changed("expires") {
-			return fail(fmt.Errorf("at least one of --label or --expires must be supplied"))
+		if !cmd.Flags().Changed("label") {
+			return fail(fmt.Errorf("--label must be supplied"))
 		}
 		cfg, client, err := newClient()
 		if err != nil {
@@ -1288,20 +1288,14 @@ func init() {
 		if cmd.Flags().Changed("label") {
 			body["label"] = sshEditLabel
 		}
-		if cmd.Flags().Changed("expires") {
-			body["expires_on"] = expires
-		}
 		var raw json.RawMessage
 		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
 			return fail(err)
 		}
-		_ = sshEditYes
 		return emitObjectFields(decorateKey(raw), output.SSHKeyFields, output.SSHKeySummary)
 	}}
 	sshEdit.Flags().StringVar(&sshEditUser, "user", "", "Unsupported for writes; omit this flag")
 	sshEdit.Flags().StringVar(&sshEditLabel, "label", "", "New key label")
-	sshEdit.Flags().StringVar(&sshEditExpires, "expires", "", "New expiry date")
-	sshEdit.Flags().BoolVar(&sshEditYes, "yes", false, "Reserved for compatibility")
 	var sshDeleteUser string
 	var sshDeleteYes bool
 	sshDelete := &cobra.Command{Use: "delete <id> --yes", Short: "Delete an account SSH key", Long: "Delete an account SSH key. This is a destructive write operation and requires --yes.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {

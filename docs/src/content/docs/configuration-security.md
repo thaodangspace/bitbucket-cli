@@ -82,11 +82,13 @@ Bitbucket API tokens grant repository-level scopes. A conservative mapping:
   repository, workspace, or deployment environment
 - Self-hosted runners: the pipeline runner read/write scopes for the selected
   repository or workspace
-- Webhook reads: `read:webhook:bitbucket`; webhook creation and updates:
-  `write:webhook:bitbucket`; webhook deletion: `delete:webhook:bitbucket`
-  (the `/hook_events` catalog is public)
-- Account SSH keys: `read:ssh-key:bitbucket`, `write:ssh-key:bitbucket`, and
-  `delete:ssh-key:bitbucket` for list/view, add/edit, and delete respectively
+- Webhook reads: `read:webhook:bitbucket`; webhook creation and updates require
+  both `read:webhook:bitbucket` and `write:webhook:bitbucket`; deletion uses
+  `delete:webhook:bitbucket` (the `/hook_events` catalog is public)
+- Account SSH keys: `read:ssh-key:bitbucket` for reads; add/edit requires both
+  `read:ssh-key:bitbucket` and `write:ssh-key:bitbucket`; delete uses
+  `delete:ssh-key:bitbucket`. Default authenticated-user resolution also needs
+  `read:user:bitbucket`.
 - Repository deploy keys: `admin:repository:bitbucket` for reads, plus
   `write:ssh-key:bitbucket` or `delete:ssh-key:bitbucket` for mutations (deploy
   keys are read-only for Git access)
@@ -138,7 +140,9 @@ bitbucket-cli deploy-key add --repository acme/web --file ./ci.pub --label ci
 
 Do not put webhook secrets or private keys in command arguments, YAML, JSON, or
 source control. `--secret-env NAME` reads the value from an environment
-variable named `NAME`; it does not accept a secret value directly.
+variable named `NAME`; it does not accept a secret value directly. SSH-key edit
+updates labels only; expiry is creation-time because Bitbucket does not document
+expiry updates through PUT.
 
 :::danger[Protect credentials and writes]
 Keep tokens out of shell history, source control, and documentation. Treat

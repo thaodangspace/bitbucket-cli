@@ -121,11 +121,17 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "webhook") {
 		scope = "read:webhook:bitbucket"
 	}
+	if strings.HasPrefix(name, "webhook create") || strings.HasPrefix(name, "webhook edit") {
+		scope = "read:webhook:bitbucket and write:webhook:bitbucket"
+	}
+	if strings.HasPrefix(name, "webhook apply") {
+		scope = "read:webhook:bitbucket, write:webhook:bitbucket (plus delete:webhook:bitbucket with --prune)"
+	}
 	if strings.HasPrefix(name, "webhook events") {
 		scope = "none (public event catalog)"
 	}
 	if strings.HasPrefix(name, "ssh-key") {
-		scope = "read:ssh-key:bitbucket"
+		scope = "read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)"
 	}
 	if strings.HasPrefix(name, "deploy-key") {
 		scope = "admin:repository:bitbucket"
@@ -195,11 +201,20 @@ func commandMetadata(name string) (classification, scope string) {
 			if strings.HasPrefix(name, "webhook delete") {
 				return "delete", "delete:webhook:bitbucket"
 			}
+			if strings.HasPrefix(name, "webhook apply") {
+				return "write", "read:webhook:bitbucket, write:webhook:bitbucket (plus delete:webhook:bitbucket with --prune)"
+			}
 			if strings.HasPrefix(name, "webhook ") {
-				return "write", "write:webhook:bitbucket"
+				return "write", "read:webhook:bitbucket and write:webhook:bitbucket"
+			}
+			if strings.HasPrefix(name, "ssh-key delete") {
+				return "delete", "delete:ssh-key:bitbucket and read:user:bitbucket"
 			}
 			if strings.HasPrefix(name, "ssh-key ") {
-				return "write", "write:ssh-key:bitbucket"
+				return "write", "read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket"
+			}
+			if strings.HasPrefix(name, "deploy-key delete") {
+				return "delete", "admin:repository:bitbucket and delete:ssh-key:bitbucket"
 			}
 			if strings.HasPrefix(name, "deploy-key ") {
 				return "write", "write:ssh-key:bitbucket and admin:repository:bitbucket"

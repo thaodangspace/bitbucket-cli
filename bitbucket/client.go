@@ -55,8 +55,10 @@ func RequiredScopesFor(method, path string) string {
 		case http.MethodDelete:
 			return "delete:webhook:bitbucket"
 		default:
-			return "write:webhook:bitbucket"
+			return "read:webhook:bitbucket and write:webhook:bitbucket"
 		}
+	case strings.HasSuffix(strings.Split(path, "?")[0], "/user"):
+		return "read:user:bitbucket"
 	case strings.Contains(path, "/ssh-keys"):
 		switch method {
 		case http.MethodGet:
@@ -64,7 +66,7 @@ func RequiredScopesFor(method, path string) string {
 		case http.MethodDelete:
 			return "delete:ssh-key:bitbucket"
 		default:
-			return "write:ssh-key:bitbucket"
+			return "read:ssh-key:bitbucket and write:ssh-key:bitbucket"
 		}
 	case strings.Contains(path, "/deploy-keys"):
 		switch method {

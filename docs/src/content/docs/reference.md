@@ -536,8 +536,8 @@ Flags: `--file` — OpenSSH public-key file, or - for stdin (required); `--label
 
 Delete a repository deploy key
 
-- Classification: **write**
-- Required scopes: `write:ssh-key:bitbucket and admin:repository:bitbucket`
+- Classification: **delete**
+- Required scopes: `admin:repository:bitbucket and delete:ssh-key:bitbucket`
 - Example: `bitbucket-cli deploy-key delete <id> --yes`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1449,7 +1449,7 @@ View a Code Insights report
 Manage account SSH keys
 
 - Classification: **read**
-- Required scopes: `read:ssh-key:bitbucket`
+- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
 - Example: `bitbucket-cli ssh-key`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1458,7 +1458,7 @@ Manage account SSH keys
 Add an account SSH key
 
 - Classification: **write**
-- Required scopes: `write:ssh-key:bitbucket`
+- Required scopes: `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
 - Example: `bitbucket-cli ssh-key add --file <public-key>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1468,8 +1468,8 @@ Flags: `--expires` — Expiry date (YYYY-MM-DD) or RFC3339; `--file` — OpenSSH
 
 Delete an account SSH key
 
-- Classification: **write**
-- Required scopes: `write:ssh-key:bitbucket`
+- Classification: **delete**
+- Required scopes: `delete:ssh-key:bitbucket and read:user:bitbucket`
 - Example: `bitbucket-cli ssh-key delete <id> --yes`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1480,18 +1480,18 @@ Flags: `--user` — Unsupported for writes; omit this flag; `--yes` — Confirm 
 Edit an account SSH key
 
 - Classification: **write**
-- Required scopes: `write:ssh-key:bitbucket`
+- Required scopes: `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
 - Example: `bitbucket-cli ssh-key edit <id>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
-Flags: `--expires` — New expiry date; `--label` — New key label; `--user` — Unsupported for writes; omit this flag; `--yes` — Reserved for compatibility
+Flags: `--label` — New key label; `--user` — Unsupported for writes; omit this flag
 
 ## `ssh-key list`
 
 List account SSH keys
 
 - Classification: **read**
-- Required scopes: `read:ssh-key:bitbucket`
+- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
 - Example: `bitbucket-cli ssh-key list`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1502,7 +1502,7 @@ Flags: `--limit` — Maximum keys to return; `--user` — User selector for read
 View an account SSH key
 
 - Classification: **read**
-- Required scopes: `read:ssh-key:bitbucket`
+- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
 - Example: `bitbucket-cli ssh-key view <id>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1578,7 +1578,7 @@ Manage Bitbucket webhooks
 Apply declarative webhook configuration
 
 - Classification: **write**
-- Required scopes: `write:webhook:bitbucket`
+- Required scopes: `read:webhook:bitbucket, write:webhook:bitbucket (plus delete:webhook:bitbucket with --prune)`
 - Example: `bitbucket-cli webhook apply --file <yaml|json>`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1589,7 +1589,7 @@ Flags: `--allow-insecure-localhost` — Allow http://localhost destinations; `--
 Create a webhook
 
 - Classification: **write**
-- Required scopes: `write:webhook:bitbucket`
+- Required scopes: `read:webhook:bitbucket and write:webhook:bitbucket`
 - Example: `bitbucket-cli webhook create --url <https-url> --event <key>...`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1611,7 +1611,7 @@ Flags: `--repository` — Repository selector (workspace/repo or URL); `--worksp
 Edit a webhook
 
 - Classification: **write**
-- Required scopes: `write:webhook:bitbucket`
+- Required scopes: `read:webhook:bitbucket and write:webhook:bitbucket`
 - Example: `bitbucket-cli webhook edit <uuid>`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
