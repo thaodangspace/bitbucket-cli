@@ -54,7 +54,10 @@ func RequiredScopesFor(method, path string) string {
 	case strings.Contains(path, "/refs/branches"), strings.Contains(path, "/commits"):
 		return "repository:read"
 	case strings.Contains(path, "/pipeline"):
-		return "pipeline:read"
+		if method == http.MethodGet {
+			return "pipeline:read"
+		}
+		return "pipeline:write"
 	case strings.Contains(path, "/repositories/") && strings.HasSuffix(strings.Split(strings.Split(path, "?")[0], "/repositories/")[1], "/forks") && method == http.MethodPost:
 		return "read:repository:bitbucket and write:repository:bitbucket"
 	case repositoryResourcePath(path) && method == http.MethodPost:

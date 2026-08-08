@@ -176,6 +176,68 @@ Pipeline commands
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli pipeline`
 
+## `pipeline cache`
+
+Manage pipeline caches
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline cache`
+
+## `pipeline cache delete <uuid|all>`
+
+Delete a pipeline cache
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline cache delete <uuid|all>`
+
+Flags: `--all` — Confirm all-cache deletion; `--yes` — Confirm deletion
+
+## `pipeline cache list`
+
+List pipeline caches
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline cache list`
+
+Flags: `--limit` — Maximum caches
+
+## `pipeline config`
+
+Manage pipeline configuration
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline config`
+
+## `pipeline config disable`
+
+Disable Pipelines
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline config disable`
+
+Flags: `--yes` — Confirm disabling Pipelines
+
+## `pipeline config enable`
+
+Enable Pipelines
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline config enable`
+
+## `pipeline config view`
+
+View pipeline configuration
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline config view`
+
 ## `pipeline get <uuid>`
 
 Get a single pipeline run by UUID with its steps
@@ -197,6 +259,219 @@ List pipeline runs for a repository
 - JSON fields: `uuid,build_number,state,target,trigger,steps`
 
 Flags: `--limit` — Maximum pipelines to return; `--state` — Filter by state: PENDING, IN_PROGRESS, COMPLETED, PAUSED, HALTED, ERROR
+
+## `pipeline log <pipeline> [step]`
+
+Read a pipeline step log
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline log <pipeline> [step]`
+
+Flags: `--follow` — Poll for new log content; `--interval` — Polling interval; `--output` — Write atomically to this file
+
+## `pipeline run`
+
+Start a pipeline
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline run`
+
+Flags: `--branch` — Run against a branch; `--commit` — Run against a commit hash; `--custom` — Custom pipeline selector; `--secured-variable` — Secured variable key; read its value from stdin (repeatable); `--tag` — Run against a tag; `--variable` — Pipeline variable KEY=VALUE (repeatable); `--wait` — Wait for the pipeline to finish
+
+## `pipeline runner`
+
+Manage pipeline runners
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline runner`
+
+## `pipeline runner create`
+
+Create a pipeline runner
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline runner create`
+
+Flags: `--labels` — Runner labels; `--name` — Runner name; `--workspace` — Create workspace runner
+
+## `pipeline runner delete <uuid>`
+
+Delete a pipeline runner
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline runner delete <uuid>`
+
+Flags: `--workspace` — Delete workspace runner; `--yes` — Confirm deletion
+
+## `pipeline runner edit <uuid>`
+
+Edit a pipeline runner
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline runner edit <uuid>`
+
+Flags: `--enabled` — Enable or disable runner; `--labels` — Runner labels; `--name` — Runner name; `--workspace` — Edit workspace runner
+
+## `pipeline runner list`
+
+List pipeline runners
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline runner list`
+
+Flags: `--limit` — Maximum runners; `--workspace` — Use workspace runners
+
+## `pipeline runner view <uuid>`
+
+View a pipeline runner
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline runner view <uuid>`
+
+Flags: `--workspace` — Use workspace runner
+
+## `pipeline schedule`
+
+Manage pipeline schedules
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline schedule`
+
+## `pipeline schedule create`
+
+Create a pipeline schedule
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline schedule create`
+
+Flags: `--branch` — Schedule branch; `--commit` — Schedule commit hash; `--cron` — Five-field cron expression; `--custom` — Custom pipeline selector; `--enabled` — Enable the schedule; `--tag` — Schedule tag
+
+## `pipeline schedule delete <uuid>`
+
+Delete a pipeline schedule
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline schedule delete <uuid>`
+
+Flags: `--yes` — Confirm deletion
+
+## `pipeline schedule edit <uuid>`
+
+Edit a pipeline schedule
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline schedule edit <uuid>`
+
+Flags: `--branch` — New branch; `--commit` — New commit; `--cron` — New cron expression; `--custom` — New custom selector; `--enabled` — Enable or disable; `--tag` — New tag
+
+## `pipeline schedule list`
+
+List pipeline schedules
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline schedule list`
+
+## `pipeline schedule runs <uuid>`
+
+List schedule runs
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline schedule runs <uuid>`
+
+Flags: `--limit` — Maximum runs
+
+## `pipeline steps <pipeline>`
+
+List pipeline steps
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline steps <pipeline>`
+
+Flags: `--limit` — Maximum steps to return
+
+## `pipeline stop <pipeline>`
+
+Stop a pipeline
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline stop <pipeline>`
+
+Flags: `--yes` — Confirm stopping the pipeline
+
+## `pipeline test-report <pipeline> [step]`
+
+Read a pipeline test report
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline test-report <pipeline> [step]`
+
+Flags: `--cases` — Include test cases; `--output` — Write raw report output atomically to this file
+
+## `pipeline variable`
+
+Manage pipeline variables
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline variable`
+
+## `pipeline variable delete <key-or-uuid>`
+
+Delete a pipeline variable
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline variable delete <key-or-uuid>`
+
+Flags: `--environment` — Deployment environment UUID; `--scope` — Variable scope; `--yes` — Confirm deletion
+
+## `pipeline variable list`
+
+List pipeline variables
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline variable list`
+
+Flags: `--environment` — Deployment environment UUID; `--scope` — repository, workspace, or deployment
+
+## `pipeline variable set <key>`
+
+Create or update a pipeline variable
+
+- Classification: **write**
+- Required scopes: `write:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline variable set <key>`
+
+Flags: `--create` — Require creation; `--environment` — Deployment environment UUID; `--scope` — Variable scope; `--secured` — Mark variable secured; `--update` — Require update; `--value-file` — Read value from a file; `--value-stdin` — Read value from stdin; `--value` — Variable value
+
+## `pipeline watch <pipeline>`
+
+Watch a pipeline until it finishes
+
+- Classification: **read**
+- Required scopes: `read:pipeline:bitbucket`
+- Example: `bitbucket-cli pipeline watch <pipeline>`
+- JSON fields: `uuid,build_number,state,target,trigger,steps`
+
+Flags: `--exit-status` — Exit non-zero for an unsuccessful result; `--interval` — Polling interval
 
 ## `pr`
 

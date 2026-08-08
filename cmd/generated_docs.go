@@ -55,7 +55,7 @@ func jsonFieldsForCommand(name string) string {
 		return "id,title,state,author,source,destination,reviewers"
 	case strings.HasPrefix(name, "branch list"):
 		return "name,target,links"
-	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"):
+	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"), strings.HasPrefix(name, "pipeline watch"):
 		return "uuid,build_number,state,target,trigger,steps"
 	case strings.HasPrefix(name, "pr comments"), strings.HasPrefix(name, "pr comment"):
 		return "id,content,user,parent,inline,pending,resolution,created_on,updated_on"
@@ -88,10 +88,13 @@ func commandMetadata(name string) (classification, scope string) {
 	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
 		return "write", "none (local git configuration)"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete", "pipeline run", "pipeline stop", "pipeline schedule create", "pipeline schedule edit", "pipeline schedule delete", "pipeline variable set", "pipeline variable delete", "pipeline cache delete", "pipeline runner create", "pipeline runner edit", "pipeline runner delete", "pipeline config enable", "pipeline config disable"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline ") {
+				return "write", "write:pipeline:bitbucket"
 			}
 			return "write", scope
 		}

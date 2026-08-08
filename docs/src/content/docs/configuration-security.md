@@ -75,7 +75,13 @@ Bitbucket API tokens grant repository-level scopes. A conservative mapping:
 - PR comments and writes (`pr comment`, `pr create`, `pr update`):
   `write:pullrequest:bitbucket`
 - Downloads uploads (`pr attach`): `write:repository:bitbucket`
-- Pipelines reads: `pipeline:read`
+- Pipelines reads (`pipeline list/get/steps/log/test-report/watch`): `pipeline:read`
+- Pipeline execution and administration (`pipeline run/stop`, schedules, caches,
+  and configuration): `pipeline:write`
+- Pipeline variables: the pipeline variable read/write scopes for the selected
+  repository, workspace, or deployment environment
+- Self-hosted runners: the pipeline runner read/write scopes for the selected
+  repository or workspace
 
 On a `403`, the CLI includes the endpoint's documented required scopes in the
 error so the token can be re-created with the right grants.

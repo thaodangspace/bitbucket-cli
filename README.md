@@ -145,7 +145,18 @@ and repo are auto-detected. A local `bitbucket-cli.repository` git config set by
 | `pr update <id> [--title <t>] [--description ...]` | Update a PR's title/description (write) |
 | `branch list [--query <q>] [--limit N]` | List branches |
 | `pipeline list [--state <state>] [--limit N]` | List pipeline runs |
-| `pipeline get <uuid> [--web]` | Pipeline details and steps |
+| `pipeline get <uuid|build-number|url> [--web]` | Pipeline details and steps |
+| `pipeline run --branch <name>\|--tag <name>\|--commit <hash>` | Start a pipeline (write) |
+| `pipeline stop <pipeline> --yes` | Stop a pipeline (write) |
+| `pipeline watch <pipeline> [--interval D] [--exit-status]` | Watch a pipeline |
+| `pipeline steps <pipeline> [--limit N]` | List pipeline steps |
+| `pipeline log <pipeline> [<step>] [--follow]` | Read raw step logs |
+| `pipeline test-report <pipeline> [<step>] [--cases]` | Read test reports |
+| `pipeline schedule list\|create\|edit\|delete\|runs` | Manage schedules (writes require care) |
+| `pipeline variable list\|set\|delete` | Manage repository/workspace/deployment variables |
+| `pipeline cache list\|delete` | Manage pipeline caches |
+| `pipeline runner list\|view\|create\|edit\|delete` | Manage self-hosted runners |
+| `pipeline config view\|enable\|disable` | Manage Pipelines configuration |
 | `browse [<path>]` | Open the repository in a browser |
 | `completion bash\|zsh\|fish\|powershell` | Generate shell completion |
 | `alias set\|delete\|list` | Manage local command aliases |

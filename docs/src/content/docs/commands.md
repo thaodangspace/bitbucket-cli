@@ -139,6 +139,29 @@ bitbucket-cli alias list
 Pipeline states include `PENDING`, `IN_PROGRESS`, `COMPLETED`, `PAUSED`,
 `HALTED`, and `ERROR`.
 
+Pipeline workflows are also available:
+
+```sh
+bitbucket-cli pipeline run --branch main [--custom lint] [--variable KEY=VALUE]
+bitbucket-cli pipeline stop <uuid> --yes
+bitbucket-cli pipeline watch <uuid> --interval 5s --exit-status
+bitbucket-cli pipeline steps <uuid>
+bitbucket-cli pipeline log <uuid> [<step>] --follow --output build.log
+bitbucket-cli pipeline test-report <uuid> [<step>] --cases
+bitbucket-cli pipeline schedule list
+bitbucket-cli pipeline variable list --scope repository
+bitbucket-cli pipeline cache list
+bitbucket-cli pipeline runner list
+bitbucket-cli pipeline config view
+```
+
+`run` requires exactly one target selector (`--branch`, `--tag`, or `--commit`).
+Secured pipeline variables are never accepted as visible command-line values;
+use repeated `--secured-variable KEY` flags and provide one value per line on
+stdin. Destructive commands require `--yes`; deleting all caches additionally
+requires `--all`. Pipeline logs and reports support raw atomic `--output` files.
+Pipeline selectors accept UUIDs, build numbers, and Bitbucket pipeline URLs.
+
 ## Generic `api` command
 
 `api` is an escape hatch for any Bitbucket Cloud REST 2.0 endpoint that is newly
