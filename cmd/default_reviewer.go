@@ -97,7 +97,7 @@ func resolveAccountSelector(ctx context.Context, client *bitbucket.Client, works
 	if uuidPattern.MatchString(selector) {
 		return map[string]any{"uuid": selector}, nil
 	}
-	if accountIDPattern.MatchString(selector) {
+	if accountIDPattern.MatchString(selector) || strings.Contains(selector, ":") {
 		return map[string]any{"account_id": selector}, nil
 	}
 	// A nickname is resolved through the users endpoint. This avoids treating
