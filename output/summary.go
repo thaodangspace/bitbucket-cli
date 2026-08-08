@@ -209,6 +209,58 @@ func PipelineSummary(pipeline map[string]any) string {
 	return fmt.Sprintf("#%s %s %s %s %s", buildNum, stateName, branch, trigger, dur)
 }
 
+// WorkspaceSummary renders a concise workspace identity.
+func WorkspaceSummary(workspace map[string]any) string {
+	for _, key := range []string{"name", "slug", "uuid"} {
+		if value, ok := str(workspace, key); ok && value != "" {
+			return value
+		}
+	}
+	return "unknown workspace"
+}
+
+// WorkspaceMemberSummary renders either a membership or account object.
+func WorkspaceMemberSummary(member map[string]any) string {
+	if user, ok := member["user"].(map[string]any); ok {
+		return AccountSummary(user)
+	}
+	return AccountSummary(member)
+}
+
+// ProjectSummary renders a concise project identity.
+func ProjectSummary(project map[string]any) string {
+	key, _ := str(project, "key")
+	name, _ := str(project, "name")
+	if key != "" && name != "" {
+		return key + " " + name
+	}
+	if name != "" {
+		return name
+	}
+	if key != "" {
+		return key
+	}
+	return "unknown project"
+}
+
+// PermissionSummary renders a principal and normalized permission.
+func PermissionSummary(permission map[string]any) string {
+	principal := "unknown"
+	if user, ok := permission["user"].(map[string]any); ok {
+		principal = AccountSummary(user)
+	}
+	if group, ok := permission["group"].(map[string]any); ok {
+		if value, exists := str(group, "slug"); exists && value != "" {
+			principal = value
+		}
+	}
+	level, _ := str(permission, "permission")
+	if level == "" {
+		level, _ = str(permission, "after")
+	}
+	return principal + " " + level
+}
+
 // RepoSummary renders "Repository: <full_name|name|unknown>".
 func RepoSummary(repo map[string]any) string {
 	if full, ok := str(repo, "full_name"); ok && full != "" {

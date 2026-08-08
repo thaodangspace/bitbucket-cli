@@ -134,6 +134,12 @@ and repo are auto-detected. A local `bitbucket-cli.repository` git config set by
 | `repo clone <workspace/repo|url>` | Clone a repository |
 | `repo browse [<workspace/repo>] [<path>]` | Open a repository path in a browser |
 | `repo set-default [<workspace/repo>]` | Set a local repository default |
+| `workspace list|view|members` | List workspaces, details, and members |
+| `workspace member view <user-selector>` | View a workspace membership |
+| `workspace invite/remove-member` | Discoverable capability checks; unsupported by the current REST API |
+| `project list|view|create|edit|delete` | Manage Bitbucket projects (writes require care) |
+| `permission repos|users|groups` | Inspect effective and explicit repository permissions |
+| `permission grant|revoke` | Change one explicit repository permission (write) |
 | `repo get [--web]` | Compatibility alias for `repo view` |
 | `pr list [--state OPEN\|MERGED\|DECLINED\|SUPERSEDED] [--limit N]` | List pull requests |
 | `pr get [<id-or-url>] [--web]` | One pull request |
@@ -160,6 +166,8 @@ and repo are auto-detected. A local `bitbucket-cli.repository` git config set by
 | `browse [<path>]` | Open the repository in a browser |
 | `completion bash\|zsh\|fish\|powershell` | Generate shell completion |
 | `alias set\|delete\|list` | Manage local command aliases |
+
+Workspace/project selectors accept slugs, UUIDs, and Bitbucket URLs. User selectors accept account UUIDs, account IDs, nicknames, or uniquely resolved display names. Permission mutations return auditable before/after results and treat no-op changes as unchanged. The current REST API has no supported workspace invitation or member-removal endpoint; those commands return a targeted capability error rather than suggesting deprecated app passwords.
 
 Global flags: `--workspace`, `--repo`, `-R/--repository`, `--pretty`, `--json`,
 `--jq`, `--template`, `--format json|table|yaml|raw`, `--color`, and `--pager`.

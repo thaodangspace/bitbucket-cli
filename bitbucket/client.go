@@ -45,6 +45,26 @@ func RequiredScopes(path string) string {
 // RequiredScopesFor returns the documented token scopes for an HTTP operation.
 func RequiredScopesFor(method, path string) string {
 	switch {
+	case strings.Contains(path, "/permissions-config/"):
+		if method == http.MethodGet {
+			return "read:repository:bitbucket"
+		}
+		if method == http.MethodDelete {
+			return "admin:repository:bitbucket and delete:permission:bitbucket"
+		}
+		return "admin:repository:bitbucket and write:permission:bitbucket"
+	case strings.Contains(path, "/permissions/repositories"):
+		return "admin:workspace:bitbucket"
+	case strings.Contains(path, "/workspaces/") && strings.Contains(path, "/projects"):
+		switch method {
+		case http.MethodGet:
+			return "read:project:bitbucket"
+		case http.MethodDelete, http.MethodPost, http.MethodPut:
+			return "admin:project:bitbucket"
+		}
+		return "admin:project:bitbucket"
+	case strings.Contains(path, "/workspaces/") && strings.Contains(path, "/members"):
+		return "read:workspace:bitbucket"
 	case strings.Contains(path, "/reports") || strings.Contains(path, "/annotations"):
 		if method == http.MethodGet {
 			return "read:repository:bitbucket"
@@ -107,6 +127,8 @@ func RequiredScopesFor(method, path string) string {
 		return "delete:repository:bitbucket"
 	case strings.Contains(path, "/repositories") && method != http.MethodGet:
 		return "write:repository:bitbucket"
+	case strings.Contains(path, "/workspaces"):
+		return "read:workspace:bitbucket"
 	case method == http.MethodGet:
 		return "read:repository:bitbucket"
 	default:

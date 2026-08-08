@@ -512,6 +512,70 @@ Remove a default reviewer
 
 Flags: `--yes` — Confirm removal
 
+## `permission`
+
+Repository permission commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli permission`
+- JSON fields: `permission,user,group,repository,before,after,changed`
+
+## `permission grant --repository <workspace/repo> (--user <selector>|--group <slug>)`
+
+Grant an explicit repository permission
+
+- Classification: **write**
+- Required scopes: `admin:repository:bitbucket, write:permission:bitbucket`
+- Example: `bitbucket-cli permission grant --repository <workspace/repo> (--user <selector>|--group <slug>)`
+- JSON fields: `permission,user,group,repository,before,after,changed`
+
+Flags: `--group` — Group slug; `--permission` — Permission level: read, write, or admin; `--user` — User selector
+
+## `permission groups`
+
+List explicit repository group permissions
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli permission groups`
+- JSON fields: `permission,user,group,repository,before,after,changed`
+
+Flags: `--limit` — Maximum permissions to return
+
+## `permission repos --user <user-selector>`
+
+List repositories accessible to a user
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli permission repos --user <user-selector>`
+- JSON fields: `permission,user,group,repository,before,after,changed`
+
+Flags: `--limit` — Maximum permissions to return; `--query` — Additional Bitbucket q expression; `--user` — User selector (required); `--workspace` — Workspace slug or UUID
+
+## `permission revoke --repository <workspace/repo> (--user <selector>|--group <slug>)`
+
+Revoke an explicit repository permission
+
+- Classification: **write**
+- Required scopes: `admin:repository:bitbucket, delete:permission:bitbucket`
+- Example: `bitbucket-cli permission revoke --repository <workspace/repo> (--user <selector>|--group <slug>)`
+- JSON fields: `permission,user,group,repository,before,after,changed`
+
+Flags: `--group` — Group slug; `--user` — User selector; `--yes` — Confirm revocation
+
+## `permission users`
+
+List explicit repository user permissions
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli permission users`
+- JSON fields: `permission,user,group,repository,before,after,changed`
+
+Flags: `--limit` — Maximum permissions to return
+
 ## `pipeline`
 
 Pipeline commands
@@ -1118,6 +1182,70 @@ View a pull request by ID, URL, or current branch
 
 Flags: `--activity` — Include pull request activity; `--comments` — Include pull request comments; `--web` — Open the pull request in a browser
 
+## `project`
+
+Project commands
+
+- Classification: **read**
+- Required scopes: `read:project:bitbucket`
+- Example: `bitbucket-cli project`
+- JSON fields: `key,name,uuid,description,is_private,links,repositories`
+
+## `project create --key <key> --name <name>`
+
+Create a project
+
+- Classification: **write**
+- Required scopes: `admin:project:bitbucket`
+- Example: `bitbucket-cli project create --key <key> --name <name>`
+- JSON fields: `key,name,uuid,description,is_private,links,repositories`
+
+Flags: `--description` — Project description; `--key` — Project key (required); `--name` — Project name (required); `--private` — Whether the project is private; `--workspace` — Workspace slug or UUID
+
+## `project delete <key-or-uuid> --yes`
+
+Delete a project
+
+- Classification: **write**
+- Required scopes: `admin:project:bitbucket`
+- Example: `bitbucket-cli project delete <key-or-uuid> --yes`
+- JSON fields: `key,name,uuid,description,is_private,links,repositories`
+
+Flags: `--workspace` — Workspace slug or UUID; `--yes` — Confirm deletion
+
+## `project edit <key-or-uuid>`
+
+Edit a project
+
+- Classification: **write**
+- Required scopes: `admin:project:bitbucket`
+- Example: `bitbucket-cli project edit <key-or-uuid>`
+- JSON fields: `key,name,uuid,description,is_private,links,repositories`
+
+Flags: `--description` — New project description; `--key` — New project key; `--name` — New project name; `--private` — Whether the project is private; `--workspace` — Workspace slug or UUID
+
+## `project list`
+
+List projects
+
+- Classification: **read**
+- Required scopes: `read:project:bitbucket`
+- Example: `bitbucket-cli project list`
+- JSON fields: `key,name,uuid,description,is_private,links,repositories`
+
+Flags: `--limit` — Maximum projects to return; `--query` — Bitbucket q expression; `--workspace` — Workspace slug or UUID
+
+## `project view <key-or-uuid>`
+
+View a project
+
+- Classification: **read**
+- Required scopes: `read:project:bitbucket`
+- Example: `bitbucket-cli project view <key-or-uuid>`
+- JSON fields: `key,name,uuid,description,is_private,links,repositories`
+
+Flags: `--repos` — Include repositories in the project; `--web` — Open the project in a browser; `--workspace` — Workspace slug or UUID
+
 ## `repo`
 
 Repository commands
@@ -1329,3 +1457,76 @@ View a tag
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli tag view <name>`
 - JSON fields: `name,target,message,links,requested_target,resolved_target`
+
+## `workspace`
+
+Workspace and membership commands
+
+- Classification: **read**
+- Required scopes: `read:workspace:bitbucket`
+- Example: `bitbucket-cli workspace`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+## `workspace invite <email>`
+
+Invite a workspace member
+
+- Classification: **write**
+- Required scopes: `admin:workspace:bitbucket`
+- Example: `bitbucket-cli workspace invite <email>`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+Flags: `--group` — Workspace group slug (unsupported until invitations are exposed by the API); `--permission` — Workspace permission: read, write, or admin
+
+## `workspace list`
+
+List workspaces
+
+- Classification: **read**
+- Required scopes: `read:workspace:bitbucket`
+- Example: `bitbucket-cli workspace list`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+Flags: `--limit` — Maximum workspaces to return; `--query` — Bitbucket q expression; `--role` — Workspace role: member, collaborator, or owner
+
+## `workspace member view <user-selector>`
+
+View a workspace member
+
+- Classification: **read**
+- Required scopes: `read:workspace:bitbucket`
+- Example: `bitbucket-cli workspace member view <user-selector>`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+## `workspace members [<workspace>]`
+
+List workspace members
+
+- Classification: **read**
+- Required scopes: `read:workspace:bitbucket`
+- Example: `bitbucket-cli workspace members [<workspace>]`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+Flags: `--limit` — Maximum members to return; `--query` — Bitbucket q expression
+
+## `workspace remove-member <user-selector> --yes`
+
+Remove a workspace member
+
+- Classification: **write**
+- Required scopes: `admin:workspace:bitbucket`
+- Example: `bitbucket-cli workspace remove-member <user-selector> --yes`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+Flags: `--yes` — Confirm member removal
+
+## `workspace view [<workspace>]`
+
+View a workspace
+
+- Classification: **read**
+- Required scopes: `read:workspace:bitbucket`
+- Example: `bitbucket-cli workspace view [<workspace>]`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
+Flags: `--members` — Include workspace members; `--projects` — Include workspace projects; `--web` — Open the workspace in a browser

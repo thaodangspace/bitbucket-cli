@@ -33,6 +33,54 @@ type, and whether the token can read the resolved repository — it never prints
 the token. `auth logout` removes only the stored profile and never mutates
 environment variables.
 
+## Workspace, project, and permission commands
+
+```sh
+bitbucket-cli workspace list [--role member|collaborator|owner] [--query BBQL] [--limit N]
+bitbucket-cli workspace view [WORKSPACE] [--members] [--projects] [--web]
+bitbucket-cli workspace members [WORKSPACE] [--query BBQL] [--limit N]
+bitbucket-cli workspace member view USER_SELECTOR [--workspace WORKSPACE]
+bitbucket-cli workspace invite EMAIL [--workspace WORKSPACE] [--group GROUP] [--permission read|write|admin]
+bitbucket-cli workspace remove-member USER_SELECTOR [--workspace WORKSPACE] --yes
+
+bitbucket-cli project list [--workspace WORKSPACE] [--query BBQL] [--limit N]
+bitbucket-cli project view KEY_OR_UUID [--workspace WORKSPACE] [--repos] [--web]
+bitbucket-cli project create --key KEY --name NAME [--workspace WORKSPACE] [--description TEXT] [--private=<bool>]
+bitbucket-cli project edit KEY_OR_UUID [--workspace WORKSPACE] [flags]
+bitbucket-cli project delete KEY_OR_UUID [--workspace WORKSPACE] --yes
+
+bitbucket-cli permission repos --user USER_SELECTOR [--workspace WORKSPACE] [--limit N]
+bitbucket-cli permission users [--repository WORKSPACE/REPO] [--limit N]
+bitbucket-cli permission groups [--repository WORKSPACE/REPO] [--limit N]
+bitbucket-cli permission grant --repository WORKSPACE/REPO --user SELECTOR --permission read|write|admin
+bitbucket-cli permission grant --repository WORKSPACE/REPO --group GROUP --permission read|write|admin
+bitbucket-cli permission revoke --repository WORKSPACE/REPO (--user SELECTOR|--group GROUP) --yes
+```
+
+Workspace selectors accept slugs, UUIDs, and Bitbucket workspace URLs. User
+selectors accept account UUIDs, account IDs, nicknames, and uniquely resolved
+display names. Display-name ambiguity is an error; permission mutations never
+silently choose a principal. Member responses redact email fields by default.
+Use an explicit documented email field only when the authenticated API response
+is authorized to include it.
+
+Project lookup is case-insensitive and edit uses read-modify-write so omitted
+fields are preserved. Project deletion requires `--yes`; the CLI fetches the
+associated repository list first and reports its count without implying that
+repositories are deleted.
+
+Repository permission mutations first read the current permission and return an
+auditable `before`, `after`, `changed`, and raw permission result. Granting an
+already-present level and revoking an absent permission are no-ops.
+
+The current Bitbucket Cloud REST API supports workspace/project/repository
+reads and project CRUD, plus explicit repository user/group permission endpoints
+for credentials with the required scopes. It does **not** expose a supported
+workspace invitation or member-removal endpoint. Those commands remain visible
+in help but return a targeted capability error; deprecated app passwords are
+not suggested as a workaround. Credential-type and scope limitations are also
+reported before supported writes and in structured error details.
+
 ## Configuration and repository commands
 
 ```sh
