@@ -48,6 +48,39 @@ func TestProjectEditPreservesUnchangedFields(t *testing.T) {
 	}
 }
 
+func TestPermissionReposUsesValidBBQLQuotes(t *testing.T) {
+	var gotURL string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		gotURL = r.URL.String()
+		return jsonResp(200, `{"values":[]}`), nil
+	}, "permission", "repos", "--workspace", "team", "--user", "{123e4567-e89b-12d3-a456-426614174000}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotURL, `q=user.uuid%3D%22%7B123e4567-e89b-12d3-a456-426614174000%7D%22`) {
+		t.Fatalf("expected quoted user BBQL, got %s", gotURL)
+	}
+	if strings.Contains(gotURL, "%5C") {
+		t.Fatalf("BBQL unexpectedly contains escaped backslash: %s", gotURL)
+	}
+}
+
+func TestWorkspaceMemberViewCommandHierarchy(t *testing.T) {
+	out, err := run(t, func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.Path, "/members/") {
+			return jsonResp(200, `{"user":{"uuid":"{123e4567-e89b-12d3-a456-426614174000}","display_name":"Alice"},"role":"member"}`), nil
+		}
+		t.Fatalf("unexpected request path: %s", r.URL.Path)
+		return nil, nil
+	}, "workspace", "member", "view", "{123e4567-e89b-12d3-a456-426614174000}", "--workspace", "team")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Alice") {
+		t.Fatalf("unexpected member output: %s", out)
+	}
+}
+
 func TestPermissionGrantNoOpDoesNotWrite(t *testing.T) {
 	calls := 0
 	out, err := run(t, func(r *http.Request) (*http.Response, error) {

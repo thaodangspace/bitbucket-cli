@@ -1489,6 +1489,15 @@ List workspaces
 
 Flags: `--limit` — Maximum workspaces to return; `--query` — Bitbucket q expression; `--role` — Workspace role: member, collaborator, or owner
 
+## `workspace member`
+
+Workspace member commands
+
+- Classification: **read**
+- Required scopes: `read:workspace:bitbucket`
+- Example: `bitbucket-cli workspace member`
+- JSON fields: `name,slug,uuid,links,members,projects`
+
 ## `workspace member view <user-selector>`
 
 View a workspace member

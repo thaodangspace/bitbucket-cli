@@ -85,6 +85,12 @@ func fetchProject(ctx context.Context, client *bitbucket.Client, workspace, sele
 	return nil, "", fmt.Errorf("project %q not found in workspace %q", selector, workspace)
 }
 
+func projectRepositories(ctx context.Context, client *bitbucket.Client, workspace, project string) ([]json.RawMessage, error) {
+	q := url.Values{"pagelen": {fmt.Sprint(bitbucket.DefaultPageLen)}}
+	q.Set("q", fmt.Sprintf(`project.key="%s"`, strings.ReplaceAll(project, `"`, `\"`)))
+	return client.Paginate(ctx, "/repositories/"+bitbucket.EncodePathSegment(workspace)+"?"+q.Encode(), 0, bitbucket.DefaultMaxPages)
+}
+
 func projectRepoMetadataList(workspace, project string, values []json.RawMessage) map[string]any {
 	items := make([]any, 0, len(values))
 	for _, raw := range sanitizedValues(values) {
@@ -152,7 +158,7 @@ func init() {
 			return fail(err)
 		}
 		if viewRepos {
-			values, e := client.Paginate(ctx(cmd), projectPath(workspace, serverKey)+"/repos?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), 0, bitbucket.DefaultMaxPages)
+			values, e := projectRepositories(ctx(cmd), client, workspace, serverKey)
 			if e != nil {
 				return fail(e)
 			}
@@ -287,17 +293,14 @@ func init() {
 			return fail(fetchErr)
 		}
 		path := projectPath(workspace, canonicalKey)
-		repoValues, listErr := client.Paginate(ctx(cmd), path+"/repos?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), 0, bitbucket.DefaultMaxPages)
+		repoValues, listErr := projectRepositories(ctx(cmd), client, workspace, canonicalKey)
 		if listErr != nil {
-			var he *bitbucket.HTTPError
-			if !errors.As(listErr, &he) || he.Status != http.StatusNotFound {
-				return fail(listErr)
-			}
+			return fail(listErr)
 		}
 		if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
 			return fail(err)
 		}
-		result := map[string]any{"deleted": true, "workspace": workspace, "project": key, "repositories": len(repoValues)}
+		result := map[string]any{"deleted": true, "workspace": workspace, "project": canonicalKey, "repositories": len(repoValues)}
 		raw, _ := json.Marshal(result)
 		return emitObject(raw, nil)
 	}}

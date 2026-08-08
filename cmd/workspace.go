@@ -232,7 +232,7 @@ func init() {
 	membersCmd.Flags().IntVar(&membersLimit, "limit", bitbucket.DefaultLimit, "Maximum members to return")
 
 	memberViewCmd := &cobra.Command{
-		Use: "member view <user-selector>", Short: "View a workspace member", Long: capabilityHelp("workspace.read"), Args: cobra.ExactArgs(1),
+		Use: "view <user-selector>", Short: "View a workspace member", Long: capabilityHelp("workspace.read"), Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, client, err := newClient()
 			if err != nil {
@@ -291,6 +291,8 @@ func init() {
 	var yes bool
 	removeCmd.Flags().BoolVar(&yes, "yes", false, "Confirm member removal")
 
-	workspaceCmd.AddCommand(listCmd, viewCmd, membersCmd, memberViewCmd, inviteCmd, removeCmd)
+	memberCmd := &cobra.Command{Use: "member", Short: "Workspace member commands"}
+	memberCmd.AddCommand(memberViewCmd)
+	workspaceCmd.AddCommand(listCmd, viewCmd, membersCmd, memberCmd, inviteCmd, removeCmd)
 	rootCmd.AddCommand(workspaceCmd)
 }

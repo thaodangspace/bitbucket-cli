@@ -31,7 +31,8 @@ func permissionPath(ref config.ResolvedRepoRef, kind, selector string) string {
 func permissionSelectorQuery(account map[string]any) (string, error) {
 	for _, pair := range [][2]string{{"uuid", "user.uuid"}, {"account_id", "user.account_id"}, {"nickname", "user.nickname"}} {
 		if value, ok := account[pair[0]].(string); ok && strings.TrimSpace(value) != "" {
-			return pair[1] + `="` + strings.ReplaceAll(value, `"`, `\"`) + `"`, nil
+			escaped := strings.ReplaceAll(value, `"`, `\"`)
+			return fmt.Sprintf(`%s="%s"`, pair[1], escaped), nil
 		}
 	}
 	return "", fmt.Errorf("resolved user did not contain a supported selector")
