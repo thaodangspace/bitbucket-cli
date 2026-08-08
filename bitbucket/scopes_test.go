@@ -22,6 +22,10 @@ func TestRequiredScopesForRepositoryWorkflows(t *testing.T) {
 		{http.MethodPost, "/repositories/team/repo/commit/abc/approve", "read:repository:bitbucket and write:repository:bitbucket"},
 		{http.MethodDelete, "/repositories/team/repo/commit/abc/approve", "read:repository:bitbucket and write:repository:bitbucket"},
 		{http.MethodPost, "/repositories/team/repo/commit/abc/comments", "read:repository:bitbucket and write:repository:bitbucket"},
+		{http.MethodGet, "/repositories/team/repo/pipelines-config/variables", "read:pipeline:bitbucket"},
+		{http.MethodPost, "/repositories/team/repo/pipelines-config/variables", "admin:pipeline:bitbucket"},
+		{http.MethodPut, "/workspaces/team/pipelines-config/runners/runner-1", "read:runner:bitbucket and write:runner:bitbucket"},
+		{http.MethodDelete, "/repositories/team/repo/pipelines-config/runners/runner-1", "write:runner:bitbucket"},
 	}
 	for _, tt := range tests {
 		if got := RequiredScopesFor(tt.method, tt.path); got != tt.want {

@@ -100,6 +100,12 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
 	}
+	if strings.HasPrefix(name, "pipeline variable ") {
+		scope = "read:pipeline:bitbucket"
+	}
+	if strings.HasPrefix(name, "pipeline runner ") {
+		scope = "read:runner:bitbucket"
+	}
 	if strings.HasPrefix(name, "commit status") {
 		scope = "read:repository:bitbucket"
 	}
@@ -131,6 +137,15 @@ func commandMetadata(name string) (classification, scope string) {
 			}
 			if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
 				return "write", "read:repository:bitbucket and write:repository:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline variable ") {
+				return "write", "admin:pipeline:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline runner create") || strings.HasPrefix(name, "pipeline runner edit") {
+				return "write", "read:runner:bitbucket and write:runner:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline runner delete") {
+				return "write", "write:runner:bitbucket"
 			}
 			if strings.HasPrefix(name, "pipeline ") {
 				return "write", "write:pipeline:bitbucket"

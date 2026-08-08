@@ -313,25 +313,10 @@ func pipelineRaw(cmd *cobra.Command, client *bitbucket.Client, path, outputFile 
 	}
 }
 
-func pipelineReportCases(cmd *cobra.Command, client *bitbucket.Client, path string) (any, error) {
-	reports, err := client.Paginate(ctx(cmd), path+"/", 0, bitbucket.DefaultMaxPages)
-	if err != nil { return nil, err }
-	result := make([]map[string]any, 0, len(reports))
-	for _, raw := range reports {
-		var report map[string]any
-		if err := json.Unmarshal(raw, &report); err != nil { return nil, err }
-		reportID := fmt.Sprint(report["uuid"])
-		if reportID == "<nil>" || reportID == "" { reportID = fmt.Sprint(report["report_uuid"]) }
-		if reportID != "<nil>" && reportID != "" {
-			cases, err := client.Paginate(ctx(cmd), path+"/"+url.PathEscape(reportID)+"/test_cases/", 0, bitbucket.DefaultMaxPages)
-			if err != nil { return nil, err }
-			items := make([]any, 0, len(cases))
-			for _, item := range cases { var value any; if err := json.Unmarshal(item, &value); err != nil { return nil, err }; items = append(items, value) }
-			report["test_cases"] = items
-		}
-		result = append(result, report)
-	}
-	return result, nil
+func pipelineReportCases(cmd *cobra.Command, client *bitbucket.Client, path string) ([]json.RawMessage, error) {
+	// Bitbucket exposes test cases directly below the step's test_reports
+	// resource; there is no report UUID path component for this endpoint.
+	return client.Paginate(ctx(cmd), path+"/test_cases/", 0, bitbucket.DefaultMaxPages)
 }
 
 func init() {
@@ -470,17 +455,38 @@ func init() {
 		sid, _ := s["uuid"].(string)
 		path := fmt.Sprintf("%s/pipelines/%s/steps/%s/test_reports", base, url.PathEscape(id), url.PathEscape(sid))
 		if cases {
-			value, err := pipelineReportCases(cmd, client, path)
-			if err != nil { return fail(err) }
-			data, err := json.MarshalIndent(value, "", "  ")
-			if err != nil { return fail(err) }
+			values, err := pipelineReportCases(cmd, client, path)
+			if err != nil {
+				return fail(err)
+			}
+			items := make([]any, 0, len(values))
+			for _, value := range values {
+				var item any
+				if err := json.Unmarshal(value, &item); err != nil {
+					return fail(err)
+				}
+				items = append(items, item)
+			}
+			data, err := json.MarshalIndent(items, "", "  ")
+			if err != nil {
+				return fail(err)
+			}
 			data = append(data, '\n')
-			if reportOutput != "" { if err := writePipelineAtomic(reportOutput, data); err != nil { return fail(err) }; return nil }
+			if reportOutput != "" {
+				if err := writePipelineAtomic(reportOutput, data); err != nil {
+					return fail(err)
+				}
+				return nil
+			}
 			return writeOutput(data)
 		}
-		if reportOutput != "" { return pipelineRaw(cmd, client, path, reportOutput, false, 0) }
+		if reportOutput != "" {
+			return pipelineRaw(cmd, client, path, reportOutput, false, 0)
+		}
 		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{}, &raw); err != nil { return fail(err) }
+		if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{}, &raw); err != nil {
+			return fail(err)
+		}
 		return emitObject(raw, pipelineGenericSummary)
 	}}
 	reportCmd.Flags().BoolVar(&cases, "cases", false, "Include test cases")

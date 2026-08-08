@@ -76,6 +76,48 @@ func TestPipelineVariableListRedactsSecuredValue(t *testing.T) {
 	}
 }
 
+func TestPipelineTestReportCasesUsesDirectEndpoint(t *testing.T) {
+	var paths []string
+	out, err := run(t, func(r *http.Request) (*http.Response, error) {
+		paths = append(paths, r.URL.Path)
+		switch {
+		case strings.Contains(r.URL.Path, "/test_cases"):
+			return jsonResp(200, `{"values":[{"name":"case-1","status":"PASSED"}]}`), nil
+		case strings.Contains(r.URL.Path, "/steps/"):
+			return jsonResp(200, `{"values":[{"uuid":"step-1","name":"Test"}]}`), nil
+		default:
+			return jsonResp(200, `{}`), nil
+		}
+	}, "pipeline", "test-report", "run-1", "Test", "--cases")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(paths) != 2 || !strings.HasSuffix(paths[1], "/test_reports/test_cases/") {
+		t.Fatalf("unexpected request paths: %v", paths)
+	}
+	if strings.Contains(out, "step-1/test_cases") {
+		t.Fatalf("report UUID was incorrectly included in cases endpoint: %s", out)
+	}
+	if !strings.Contains(out, "case-1") {
+		t.Fatalf("test case missing from output: %s", out)
+	}
+}
+
+func TestPipelineCommandMetadataScopes(t *testing.T) {
+	_, scope := commandMetadata("pipeline variable set <key>")
+	if scope != "admin:pipeline:bitbucket" {
+		t.Fatalf("variable scope = %q", scope)
+	}
+	_, scope = commandMetadata("pipeline runner create")
+	if scope != "read:runner:bitbucket and write:runner:bitbucket" {
+		t.Fatalf("runner create scope = %q", scope)
+	}
+	_, scope = commandMetadata("pipeline runner delete <uuid>")
+	if scope != "write:runner:bitbucket" {
+		t.Fatalf("runner delete scope = %q", scope)
+	}
+}
+
 func TestPipelineGetWarningIsStructured(t *testing.T) {
 	out, err := run(t, func(r *http.Request) (*http.Response, error) {
 		if strings.Contains(r.URL.Path, "/steps") {

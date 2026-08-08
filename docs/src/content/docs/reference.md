@@ -637,7 +637,7 @@ Manage pipeline runners
 Create a pipeline runner
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes: `read:runner:bitbucket and write:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner create`
 
 Flags: `--labels` — Runner labels; `--name` — Runner name; `--workspace` — Create workspace runner
@@ -647,7 +647,7 @@ Flags: `--labels` — Runner labels; `--name` — Runner name; `--workspace` —
 Delete a pipeline runner
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes: `write:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner delete <uuid>`
 
 Flags: `--workspace` — Delete workspace runner; `--yes` — Confirm deletion
@@ -657,7 +657,7 @@ Flags: `--workspace` — Delete workspace runner; `--yes` — Confirm deletion
 Edit a pipeline runner
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes: `read:runner:bitbucket and write:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner edit <uuid>`
 
 Flags: `--enabled` — Enable or disable runner; `--labels` — Runner labels; `--name` — Runner name; `--workspace` — Edit workspace runner
@@ -667,7 +667,7 @@ Flags: `--enabled` — Enable or disable runner; `--labels` — Runner labels; `
 List pipeline runners
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes: `read:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner list`
 
 Flags: `--limit` — Maximum runners; `--workspace` — Use workspace runners
@@ -677,7 +677,7 @@ Flags: `--limit` — Maximum runners; `--workspace` — Use workspace runners
 View a pipeline runner
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes: `read:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner view <uuid>`
 
 Flags: `--workspace` — Use workspace runner
@@ -781,7 +781,7 @@ Manage pipeline variables
 Delete a pipeline variable
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes: `admin:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline variable delete <key-or-uuid>`
 
 Flags: `--environment` — Deployment environment UUID; `--scope` — Variable scope; `--yes` — Confirm deletion
@@ -801,7 +801,7 @@ Flags: `--environment` — Deployment environment UUID; `--scope` — repository
 Create or update a pipeline variable
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes: `admin:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline variable set <key>`
 
 Flags: `--create` — Require creation; `--environment` — Deployment environment UUID; `--scope` — Variable scope; `--secured` — Mark variable secured; `--update` — Require update; `--value-file` — Read value from a file; `--value-stdin` — Read value from stdin; `--value` — Variable value
