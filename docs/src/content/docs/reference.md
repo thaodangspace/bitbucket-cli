@@ -512,6 +512,48 @@ Remove a default reviewer
 
 Flags: `--yes` — Confirm removal
 
+## `deploy-key`
+
+Manage repository deploy keys (read-only Git access)
+
+- Classification: **read**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli deploy-key`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+## `deploy-key add --file <public-key>`
+
+Add a repository deploy key
+
+- Classification: **write**
+- Required scopes: `write:ssh-key:bitbucket and admin:repository:bitbucket`
+- Example: `bitbucket-cli deploy-key add --file <public-key>`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--file` — OpenSSH public-key file, or - for stdin (required); `--label` — Key label; `--repository` — Repository selector (required)
+
+## `deploy-key delete <id> --yes`
+
+Delete a repository deploy key
+
+- Classification: **delete**
+- Required scopes: `admin:repository:bitbucket and delete:ssh-key:bitbucket`
+- Example: `bitbucket-cli deploy-key delete <id> --yes`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--repository` — Repository selector (required); `--yes` — Confirm deletion
+
+## `deploy-key list`
+
+List repository deploy keys
+
+- Classification: **read**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli deploy-key list`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--limit` — Maximum deploy keys to return; `--repository` — Repository selector (workspace/repo or URL)
+
 ## `permission`
 
 Repository permission commands
@@ -1402,6 +1444,70 @@ View a Code Insights report
 - Example: `bitbucket-cli report view <commit> <report-id>`
 - JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
+## `ssh-key`
+
+Manage account SSH keys
+
+- Classification: **read**
+- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
+- Example: `bitbucket-cli ssh-key`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+## `ssh-key add --file <public-key>`
+
+Add an account SSH key
+
+- Classification: **write**
+- Required scopes: `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
+- Example: `bitbucket-cli ssh-key add --file <public-key>`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--expires` — Expiry date (YYYY-MM-DD) or RFC3339; `--file` — OpenSSH public-key file, or - for stdin (required); `--label` — Key label; `--user` — Unsupported for writes; account SSH keys default to the authenticated user
+
+## `ssh-key delete <id> --yes`
+
+Delete an account SSH key
+
+- Classification: **delete**
+- Required scopes: `delete:ssh-key:bitbucket and read:user:bitbucket`
+- Example: `bitbucket-cli ssh-key delete <id> --yes`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--user` — Unsupported for writes; omit this flag; `--yes` — Confirm deletion
+
+## `ssh-key edit <id>`
+
+Edit an account SSH key
+
+- Classification: **write**
+- Required scopes: `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
+- Example: `bitbucket-cli ssh-key edit <id>`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--label` — New key label; `--user` — Unsupported for writes; omit this flag
+
+## `ssh-key list`
+
+List account SSH keys
+
+- Classification: **read**
+- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
+- Example: `bitbucket-cli ssh-key list`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--limit` — Maximum keys to return; `--user` — User selector for read operations (defaults to the authenticated user)
+
+## `ssh-key view <id>`
+
+View an account SSH key
+
+- Classification: **read**
+- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
+- Example: `bitbucket-cli ssh-key view <id>`
+- JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
+
+Flags: `--user` — User selector for read operations
+
 ## `status`
 
 Check bitbucket-cli configuration
@@ -1457,6 +1563,103 @@ View a tag
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli tag view <name>`
 - JSON fields: `name,target,message,links,requested_target,resolved_target`
+
+## `webhook`
+
+Manage Bitbucket webhooks
+
+- Classification: **read**
+- Required scopes: `read:webhook:bitbucket`
+- Example: `bitbucket-cli webhook`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+## `webhook apply --file <yaml|json>`
+
+Apply declarative webhook configuration
+
+- Classification: **write**
+- Required scopes: `read:webhook:bitbucket, write:webhook:bitbucket (plus delete:webhook:bitbucket with --prune)`
+- Example: `bitbucket-cli webhook apply --file <yaml|json>`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--allow-insecure-localhost` — Allow http://localhost destinations; `--allow-private` — Confirm non-public webhook destinations; `--allow-unknown-event` — Skip event catalog validation; `--dry-run` — Report operations without changing Bitbucket; `--file` — YAML or JSON configuration file (required); `--no-event-cache` — Do not read or write the event catalog cache; `--prune` — Delete hooks absent from the file; `--repository` — Repository selector (workspace/repo or URL); `--workspace` — Workspace slug or UUID; `--yes` — Confirm pruning
+
+## `webhook create --url <https-url> --event <key>...`
+
+Create a webhook
+
+- Classification: **write**
+- Required scopes: `read:webhook:bitbucket and write:webhook:bitbucket`
+- Example: `bitbucket-cli webhook create --url <https-url> --event <key>...`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--active-set` — Send the active value (including false); `--active` — Whether the webhook is active; `--allow-insecure-localhost` — Allow http://localhost destinations; `--allow-private` — Confirm non-public webhook destinations; `--allow-unknown-event` — Skip event catalog validation; `--description` — Webhook description; `--event` — Webhook event key (repeatable); `--no-event-cache` — Do not read or write the event catalog cache; `--repository` — Repository selector (workspace/repo or URL); `--secret-env` — Read the secret from this environment-variable name; `--secret-prompt` — Read the secret from a hidden TTY prompt; `--secret-stdin` — Read the secret from stdin; never pass it as an argument; `--url` — HTTPS webhook URL (required); `--workspace` — Workspace slug or UUID
+
+## `webhook delete <uuid> --yes`
+
+Delete a webhook
+
+- Classification: **delete**
+- Required scopes: `delete:webhook:bitbucket`
+- Example: `bitbucket-cli webhook delete <uuid> --yes`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--repository` — Repository selector (workspace/repo or URL); `--workspace` — Workspace slug or UUID; `--yes` — Confirm deletion
+
+## `webhook edit <uuid>`
+
+Edit a webhook
+
+- Classification: **write**
+- Required scopes: `read:webhook:bitbucket and write:webhook:bitbucket`
+- Example: `bitbucket-cli webhook edit <uuid>`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--active` — Whether the webhook is active; `--allow-insecure-localhost` — Allow http://localhost destinations; `--allow-private` — Confirm non-public webhook destinations; `--allow-unknown-event` — Skip event catalog validation; `--description` — New webhook description; `--event` — Replace webhook event keys (repeatable); `--no-event-cache` — Do not read or write the event catalog cache; `--repository` — Repository selector (workspace/repo or URL); `--secret-env` — Read a replacement secret from this environment-variable name; `--secret-prompt` — Read a replacement secret from a hidden TTY prompt; `--secret-stdin` — Read a replacement secret from stdin; `--url` — New HTTPS webhook URL; `--workspace` — Workspace slug or UUID
+
+## `webhook events [subject]`
+
+List webhook event keys
+
+- Classification: **read**
+- Required scopes: `none (public event catalog)`
+- Example: `bitbucket-cli webhook events [subject]`
+- JSON fields: `event`
+
+Flags: `--no-event-cache` — Do not read or write the event catalog cache; `--subject` — Catalog subject: repository, workspace, or user
+
+## `webhook export --output <file>`
+
+Export webhooks as declarative YAML or JSON
+
+- Classification: **read**
+- Required scopes: `read:webhook:bitbucket`
+- Example: `bitbucket-cli webhook export --output <file>`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--output` — Output YAML or JSON file (required); `--repository` — Repository selector (workspace/repo or URL); `--workspace` — Workspace slug or UUID
+
+## `webhook list`
+
+List webhooks
+
+- Classification: **read**
+- Required scopes: `read:webhook:bitbucket`
+- Example: `bitbucket-cli webhook list`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--limit` — Maximum webhooks to return; `--repository` — Repository selector (workspace/repo or URL); `--workspace` — Workspace slug or UUID
+
+## `webhook view <uuid>`
+
+View a webhook
+
+- Classification: **read**
+- Required scopes: `read:webhook:bitbucket`
+- Example: `bitbucket-cli webhook view <uuid>`
+- JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
+
+Flags: `--repository` — Repository selector (workspace/repo or URL); `--workspace` — Workspace slug or UUID
 
 ## `workspace`
 

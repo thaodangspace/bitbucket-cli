@@ -140,6 +140,10 @@ and repo are auto-detected. A local `bitbucket-cli.repository` git config set by
 | `project list|view|create|edit|delete` | Manage Bitbucket projects (writes require care) |
 | `permission repos|users|groups` | Inspect effective and explicit repository permissions |
 | `permission grant|revoke` | Change one explicit repository permission (write) |
+| `webhook events|list|view|create|edit|delete` | Manage repository/workspace webhooks and validate event keys |
+| `webhook export|apply` | Export or safely reconcile declarative webhook configuration |
+| `ssh-key list|view|add|edit|delete` | Manage account SSH keys (public keys only) |
+| `deploy-key list|add|delete` | Manage repository deploy keys (read-only Git access) |
 | `repo get [--web]` | Compatibility alias for `repo view` |
 | `pr list [--state OPEN\|MERGED\|DECLINED\|SUPERSEDED] [--limit N]` | List pull requests |
 | `pr get [<id-or-url>] [--web]` | One pull request |
@@ -168,6 +172,8 @@ and repo are auto-detected. A local `bitbucket-cli.repository` git config set by
 | `alias set\|delete\|list` | Manage local command aliases |
 
 Workspace/project selectors accept slugs, UUIDs, and Bitbucket URLs. User selectors accept account UUIDs, account IDs, nicknames, or uniquely resolved display names. Permission mutations return auditable before/after results and treat no-op changes as unchanged. The current REST API has no supported workspace invitation or member-removal endpoint; those commands return a targeted capability error rather than suggesting deprecated app passwords.
+
+Webhook and key writes are intentionally explicit. Webhooks require HTTPS (private destinations need `--allow-private`; `http://localhost` additionally needs `--allow-insecure-localhost`), and secrets are read with `--secret-stdin`, `--secret-prompt`, or `--secret-env NAME`, never as an argument. SSH and deploy-key commands accept only OpenSSH public keys. Deploy keys are repository-scoped and read-only for Git access; they are not account SSH keys. Webhook API-token scopes are `read:webhook:bitbucket` plus `write:webhook:bitbucket` for create/update, and `delete:webhook:bitbucket` for deletion; subscribed event types may add requirements. Account SSH-key reads use `read:ssh-key:bitbucket`; add/edit uses both `read:ssh-key:bitbucket` and `write:ssh-key:bitbucket`; delete uses `delete:ssh-key:bitbucket`. When the authenticated user is resolved by default, `read:user:bitbucket` is also required. Deploy-key reads require `admin:repository:bitbucket`; writes additionally require the documented SSH-key write/delete scope as applicable. The webhook event catalog is public. SSH-key edit changes labels only; expiry is set at creation because Bitbucket does not document expiry updates via PUT.
 
 Global flags: `--workspace`, `--repo`, `-R/--repository`, `--pretty`, `--json`,
 `--jq`, `--template`, `--format json|table|yaml|raw`, `--color`, and `--pager`.

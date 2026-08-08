@@ -45,6 +45,38 @@ func RequiredScopes(path string) string {
 // RequiredScopesFor returns the documented token scopes for an HTTP operation.
 func RequiredScopesFor(method, path string) string {
 	switch {
+	case strings.Contains(path, "/hook_events"):
+		// The public event catalog is intentionally unauthenticated.
+		return ""
+	case strings.Contains(path, "/hooks"):
+		switch method {
+		case http.MethodGet:
+			return "read:webhook:bitbucket"
+		case http.MethodDelete:
+			return "delete:webhook:bitbucket"
+		default:
+			return "read:webhook:bitbucket and write:webhook:bitbucket"
+		}
+	case strings.HasSuffix(strings.Split(path, "?")[0], "/user"):
+		return "read:user:bitbucket"
+	case strings.Contains(path, "/ssh-keys"):
+		switch method {
+		case http.MethodGet:
+			return "read:ssh-key:bitbucket"
+		case http.MethodDelete:
+			return "delete:ssh-key:bitbucket"
+		default:
+			return "read:ssh-key:bitbucket and write:ssh-key:bitbucket"
+		}
+	case strings.Contains(path, "/deploy-keys"):
+		switch method {
+		case http.MethodGet:
+			return "admin:repository:bitbucket"
+		case http.MethodDelete:
+			return "delete:ssh-key:bitbucket and admin:repository:bitbucket"
+		default:
+			return "write:ssh-key:bitbucket and admin:repository:bitbucket"
+		}
 	case strings.Contains(path, "/permissions-config/"):
 		if method == http.MethodGet {
 			return "read:repository:bitbucket"
@@ -161,7 +193,11 @@ func (e *HTTPError) Error() string {
 	case http.StatusUnauthorized:
 		return "Bitbucket authentication failed. Run `bitbucket-cli auth login` or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN."
 	case http.StatusForbidden:
-		return fmt.Sprintf("Bitbucket authorization failed. The endpoint requires the %s scope; check the token's granted scopes.", RequiredScopesFor(e.Method, e.URL))
+		scope := RequiredScopesFor(e.Method, e.URL)
+		if scope == "" {
+			return "Bitbucket authorization failed for a public endpoint; check the request and account access."
+		}
+		return fmt.Sprintf("Bitbucket authorization failed. The endpoint requires the %s scope; check the token's granted scopes.", scope)
 	case http.StatusNotFound:
 		return "Bitbucket resource not found. Check workspace, repo, and IDs."
 	case http.StatusTooManyRequests:

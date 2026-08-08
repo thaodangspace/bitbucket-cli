@@ -436,6 +436,49 @@ func ReportSummary(report map[string]any) string {
 }
 
 // AnnotationSummary renders a concise Code Insights annotation line.
+// WebhookSummary renders a redacted webhook identity.
+func WebhookSummary(webhook map[string]any) string {
+	uuid, _ := str(webhook, "uuid")
+	description, _ := str(webhook, "description")
+	active := "inactive"
+	if value, ok := webhook["active"].(bool); ok && value {
+		active = "active"
+	}
+	if uuid == "" {
+		uuid = "?"
+	}
+	if description == "" {
+		description = "(no description)"
+	}
+	return fmt.Sprintf("%s %s [%s]", uuid, description, active)
+}
+
+// WebhookEventSummary renders one event catalog key.
+func WebhookEventSummary(event map[string]any) string {
+	if value, ok := str(event, "event"); ok && value != "" {
+		return value
+	}
+	return "unknown event"
+}
+
+// SSHKeySummary renders key metadata without public-key material.
+func SSHKeySummary(key map[string]any) string {
+	label, _ := str(key, "label")
+	fingerprint, _ := str(key, "fingerprint")
+	algorithm, _ := str(key, "algorithm")
+	id := "?"
+	if value, ok := key["uuid"]; ok {
+		id = fmt.Sprintf("%v", value)
+	} else if value, ok := key["id"]; ok {
+		id = fmt.Sprintf("%v", numberish(value))
+	}
+	return fmt.Sprintf("%s %s %s %s", id, label, algorithm, fingerprint)
+}
+
+// DeployKeySummary makes the repository scope explicit to distinguish deploy
+// keys from account SSH keys.
+func DeployKeySummary(key map[string]any) string { return SSHKeySummary(key) + " [deploy/read-only]" }
+
 func AnnotationSummary(annotation map[string]any) string {
 	path, _ := str(annotation, "path")
 	if path == "" {

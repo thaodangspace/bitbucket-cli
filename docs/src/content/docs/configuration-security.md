@@ -82,6 +82,16 @@ Bitbucket API tokens grant repository-level scopes. A conservative mapping:
   repository, workspace, or deployment environment
 - Self-hosted runners: the pipeline runner read/write scopes for the selected
   repository or workspace
+- Webhook reads: `read:webhook:bitbucket`; webhook creation and updates require
+  both `read:webhook:bitbucket` and `write:webhook:bitbucket`; deletion uses
+  `delete:webhook:bitbucket` (the `/hook_events` catalog is public)
+- Account SSH keys: `read:ssh-key:bitbucket` for reads; add/edit requires both
+  `read:ssh-key:bitbucket` and `write:ssh-key:bitbucket`; delete uses
+  `delete:ssh-key:bitbucket`. Default authenticated-user resolution also needs
+  `read:user:bitbucket`.
+- Repository deploy keys: `admin:repository:bitbucket` for reads, plus
+  `write:ssh-key:bitbucket` or `delete:ssh-key:bitbucket` for mutations (deploy
+  keys are read-only for Git access)
 
 On a `403`, the CLI includes the endpoint's documented required scopes in the
 error so the token can be re-created with the right grants.
@@ -101,6 +111,38 @@ bitbucket-cli pr list --state OPEN
 
 `pr attach` stores uploaded files in repository Downloads and posts canonical
 Download links in a PR comment. It does not use a native PR attachment API.
+
+## Webhooks and SSH keys
+
+Use the event catalog before creating a CI hook; unknown event keys fail locally:
+
+```sh
+bitbucket-cli webhook events --subject repository
+printf '%s\n' "$WEBHOOK_SECRET" | bitbucket-cli webhook create \
+  --repository acme/web --url https://ci.example.test/bitbucket \
+  --description CI --event repo:push --secret-stdin
+```
+
+The CLI rejects embedded URL credentials and requires HTTPS. For local/private
+CI endpoints, add the explicit confirmation flags:
+`--allow-insecure-localhost --allow-private` as applicable. Event catalogs are
+cached briefly; use `--no-event-cache` in tests or debugging. `webhook export`
+never writes secret values; `webhook apply --dry-run` previews reconciliation,
+and `--prune --yes` is required to remove hooks absent from a file.
+
+Account keys and repository deploy keys reject private-key files and report a
+SHA-256 fingerprint locally before upload:
+
+```sh
+bitbucket-cli ssh-key add --file ~/.ssh/id_ed25519.pub --label laptop
+bitbucket-cli deploy-key add --repository acme/web --file ./ci.pub --label ci
+```
+
+Do not put webhook secrets or private keys in command arguments, YAML, JSON, or
+source control. `--secret-env NAME` reads the value from an environment
+variable named `NAME`; it does not accept a secret value directly. SSH-key edit
+updates labels only; expiry is creation-time because Bitbucket does not document
+expiry updates through PUT.
 
 :::danger[Protect credentials and writes]
 Keep tokens out of shell history, source control, and documentation. Treat
