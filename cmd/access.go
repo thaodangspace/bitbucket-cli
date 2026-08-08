@@ -382,13 +382,12 @@ func init() {
 		if !contains([]string{"repository", "workspace", "user"}, subject) {
 			return fail(fmt.Errorf("invalid webhook event subject %q", subject))
 		}
-		cfg, client, err := newClient()
+		_, client, err := newClient()
 		if err != nil {
 			return fail(err)
 		}
-		if err := requireCapability(cfg, "webhook.read"); err != nil {
-			return fail(err)
-		}
+		// /hook_events is a public catalog and intentionally has no
+		// capability/scope preflight.
 		values, err := eventCatalog(ctx(cmd), client, subject, eventNoCache)
 		if err != nil {
 			return fail(err)
@@ -554,7 +553,7 @@ func init() {
 
 	var deleteRepository, deleteWorkspace string
 	var deleteYes bool
-	deleteCmd := &cobra.Command{Use: "delete <uuid> --yes", Short: "Delete a webhook", Long: "Delete a webhook. This is a destructive write operation and requires --yes. " + capabilityHelp("webhook.write"), Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	deleteCmd := &cobra.Command{Use: "delete <uuid> --yes", Short: "Delete a webhook", Long: "Delete a webhook. This is a destructive write operation and requires --yes. " + capabilityHelp("webhook.delete"), Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if !deleteYes {
 			return fail(fmt.Errorf("refusing to delete webhook %q without --yes", args[0]))
 		}
@@ -562,7 +561,7 @@ func init() {
 		if err != nil {
 			return fail(err)
 		}
-		if err = requireCapability(cfg, "webhook.write"); err != nil {
+		if err = requireCapability(cfg, "webhook.delete"); err != nil {
 			return fail(err)
 		}
 		_, path, label, err := webhookTarget(firstNonEmptyCLI(deleteRepository, flagRepository), firstNonEmptyCLI(deleteWorkspace, flagWorkspace))
@@ -833,12 +832,15 @@ func readWebhookDocument(path string) (webhookDocument, error) {
 func normalizeHookURL(value string) string {
 	u, err := url.Parse(strings.TrimSpace(value))
 	if err != nil {
-		return strings.ToLower(strings.TrimRight(value, "/"))
+		return strings.TrimRight(value, "/")
 	}
+	// Reconciliation must preserve query parameters: a query token is part of
+	// the configured destination. Only display helpers are allowed to redact it.
+	u.Scheme = strings.ToLower(u.Scheme)
+	u.Host = strings.ToLower(u.Host)
 	u.User = nil
-	u.RawQuery = ""
 	u.Fragment = ""
-	return strings.ToLower(strings.TrimRight(u.String(), "/"))
+	return strings.TrimRight(u.String(), "/")
 }
 func hookMap(value json.RawMessage) map[string]any {
 	var m map[string]any
@@ -894,6 +896,7 @@ type webhookOperation struct {
 	UUID        string `json:"uuid,omitempty"`
 	Description string `json:"description,omitempty"`
 	URL         string `json:"url,omitempty"`
+	matchURL    string `json:"-"`
 }
 
 func planWebhookApply(specs []webhookSpec, existing []json.RawMessage, prune bool) []webhookOperation {
@@ -917,7 +920,7 @@ func planWebhookApply(specs []webhookSpec, existing []json.RawMessage, prune boo
 				action = "no-op"
 			}
 		}
-		ops = append(ops, webhookOperation{Action: action, UUID: uuidOr(spec.UUID, uuid), Description: spec.Description, URL: redactWebhookURL(spec.URL)})
+		ops = append(ops, webhookOperation{Action: action, UUID: uuidOr(spec.UUID, uuid), Description: spec.Description, URL: redactWebhookURL(spec.URL), matchURL: spec.URL})
 	}
 	if prune {
 		for _, raw := range existing {
@@ -926,7 +929,7 @@ func planWebhookApply(specs []webhookSpec, existing []json.RawMessage, prune boo
 			if uuid != "" && !matched[uuid] {
 				description, _ := current["description"].(string)
 				targetURL, _ := current["url"].(string)
-				ops = append(ops, webhookOperation{Action: "delete", UUID: uuid, Description: description, URL: redactWebhookURL(targetURL)})
+				ops = append(ops, webhookOperation{Action: "delete", UUID: uuid, Description: description, URL: redactWebhookURL(targetURL), matchURL: targetURL})
 			}
 		}
 	}
@@ -954,7 +957,7 @@ func executeWebhookApply(ctx context.Context, client *bitbucket.Client, path str
 		}
 		var spec *webhookSpec
 		for i := range specs {
-			if specs[i].UUID == op.UUID || (specs[i].UUID == "" && op.Action != "delete" && specs[i].Description == op.Description && normalizeHookURL(specs[i].URL) == normalizeHookURL(op.URL)) {
+			if specs[i].UUID == op.UUID || (specs[i].UUID == "" && op.Action != "delete" && specs[i].Description == op.Description && normalizeHookURL(specs[i].URL) == normalizeHookURL(op.matchURL)) {
 				spec = &specs[i]
 				break
 			}
@@ -1094,16 +1097,35 @@ func decoratedKeys(values []json.RawMessage) []json.RawMessage {
 	return out
 }
 func keyPath(user, id string) string {
-	if user == "" {
-		if id == "" {
-			return "/user/ssh-keys"
-		}
-		return "/user/ssh-keys/" + bitbucket.EncodePathSegment(id)
+	path := "/users/" + bitbucket.EncodePathSegment(user) + "/ssh-keys"
+	if id != "" {
+		path += "/" + bitbucket.EncodePathSegment(id)
 	}
-	if id == "" {
-		return "/users/" + bitbucket.EncodePathSegment(user) + "/ssh-keys"
+	return path
+}
+
+func resolveSSHUser(ctx context.Context, client *bitbucket.Client, selector string) (string, error) {
+	selector = strings.TrimSpace(selector)
+	if selector != "" {
+		return keyUser(selector)
 	}
-	return "/users/" + bitbucket.EncodePathSegment(user) + "/ssh-keys/" + bitbucket.EncodePathSegment(id)
+	var account map[string]any
+	if err := client.Request(ctx, "/user", bitbucket.RequestOptions{}, &account); err != nil {
+		return "", fmt.Errorf("resolve authenticated user: %w", err)
+	}
+	resolved, err := accountSelector(account)
+	if err != nil {
+		return "", fmt.Errorf("resolve authenticated user: %w", err)
+	}
+	return resolved, nil
+}
+
+func keyID(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "/?#") {
+		return "", fmt.Errorf("invalid SSH key UUID %q", value)
+	}
+	return value, nil
 }
 func keyUser(value string) (string, error) {
 	value = strings.TrimSpace(value)
@@ -1141,15 +1163,15 @@ func init() {
 	var sshUser string
 	var sshLimit int
 	sshList := &cobra.Command{Use: "list", Short: "List account SSH keys", Long: capabilityHelp("ssh-key.read"), Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		user, err := keyUser(sshUser)
-		if err != nil {
-			return fail(err)
-		}
 		cfg, client, err := newClient()
 		if err != nil {
 			return fail(err)
 		}
 		if err = requireCapability(cfg, "ssh-key.read"); err != nil {
+			return fail(err)
+		}
+		user, err := resolveSSHUser(ctx(cmd), client, sshUser)
+		if err != nil {
 			return fail(err)
 		}
 		values, err := keyList(ctx(cmd), client, user, sshLimit)
@@ -1162,11 +1184,7 @@ func init() {
 	sshList.Flags().IntVar(&sshLimit, "limit", bitbucket.DefaultLimit, "Maximum keys to return")
 	var sshViewUser string
 	sshView := &cobra.Command{Use: "view <id>", Short: "View an account SSH key", Long: capabilityHelp("ssh-key.read"), Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := parsePositiveID("SSH key id", args[0])
-		if err != nil {
-			return fail(err)
-		}
-		user, err := keyUser(sshViewUser)
+		id, err := keyID(args[0])
 		if err != nil {
 			return fail(err)
 		}
@@ -1177,8 +1195,12 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.read"); err != nil {
 			return fail(err)
 		}
+		user, err := resolveSSHUser(ctx(cmd), client, sshViewUser)
+		if err != nil {
+			return fail(err)
+		}
 		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), keyPath(user, fmt.Sprint(id)), bitbucket.RequestOptions{}, &raw); err != nil {
+		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{}, &raw); err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(decorateKey(raw), output.SSHKeyFields, output.SSHKeySummary)
@@ -1208,7 +1230,11 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.write"); err != nil {
 			return fail(err)
 		}
-		values, err := keyList(ctx(cmd), client, "", 0)
+		user, err := resolveSSHUser(ctx(cmd), client, "")
+		if err != nil {
+			return fail(err)
+		}
+		values, err := keyList(ctx(cmd), client, user, 0)
 		if err != nil {
 			return fail(err)
 		}
@@ -1216,11 +1242,12 @@ func init() {
 			return fail(fmt.Errorf("SSH key already exists (fingerprint %s)", parsed.Fingerprint))
 		}
 		body := map[string]any{"key": parsed.Material, "label": sshLabel}
+		opts := bitbucket.RequestOptions{Method: http.MethodPost, Body: body}
 		if expires != "" {
-			body["expires_at"] = expires
+			opts.Query = url.Values{"expires_on": {expires}}
 		}
 		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), keyPath("", ""), bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
+		if err := client.Request(ctx(cmd), keyPath(user, ""), opts, &raw); err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(decorateKey(raw), output.SSHKeyFields, output.SSHKeySummary)
@@ -1235,7 +1262,7 @@ func init() {
 		if sshEditUser != "" {
 			return fail(fmt.Errorf("writing another user's SSH keys is not implied; omit --user"))
 		}
-		id, err := parsePositiveID("SSH key id", args[0])
+		id, err := keyID(args[0])
 		if err != nil {
 			return fail(err)
 		}
@@ -1253,15 +1280,19 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.write"); err != nil {
 			return fail(err)
 		}
+		user, err := resolveSSHUser(ctx(cmd), client, "")
+		if err != nil {
+			return fail(err)
+		}
 		body := map[string]any{}
 		if cmd.Flags().Changed("label") {
 			body["label"] = sshEditLabel
 		}
 		if cmd.Flags().Changed("expires") {
-			body["expires_at"] = expires
+			body["expires_on"] = expires
 		}
 		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), keyPath("", fmt.Sprint(id)), bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
+		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
 			return fail(err)
 		}
 		_ = sshEditYes
@@ -1280,7 +1311,7 @@ func init() {
 		if sshDeleteUser != "" {
 			return fail(fmt.Errorf("writing another user's SSH keys is not implied; omit --user"))
 		}
-		id, err := parsePositiveID("SSH key id", args[0])
+		id, err := keyID(args[0])
 		if err != nil {
 			return fail(err)
 		}
@@ -1291,10 +1322,14 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.delete"); err != nil {
 			return fail(err)
 		}
-		if err := client.Request(ctx(cmd), keyPath("", fmt.Sprint(id)), bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
+		user, err := resolveSSHUser(ctx(cmd), client, "")
+		if err != nil {
 			return fail(err)
 		}
-		raw, _ := json.Marshal(map[string]any{"deleted": true, "id": id})
+		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
+			return fail(err)
+		}
+		raw, _ := json.Marshal(map[string]any{"deleted": true, "uuid": id})
 		return emitObject(raw, nil)
 	}}
 	sshDelete.Flags().StringVar(&sshDeleteUser, "user", "", "Unsupported for writes; omit this flag")

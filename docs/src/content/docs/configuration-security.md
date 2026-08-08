@@ -82,13 +82,14 @@ Bitbucket API tokens grant repository-level scopes. A conservative mapping:
   repository, workspace, or deployment environment
 - Self-hosted runners: the pipeline runner read/write scopes for the selected
   repository or workspace
-- Webhook reads: `read:repository:bitbucket` or `read:workspace:bitbucket`;
-  webhook writes: `admin:repository:bitbucket` or `admin:workspace:bitbucket`
+- Webhook reads: `read:webhook:bitbucket`; webhook creation and updates:
+  `write:webhook:bitbucket`; webhook deletion: `delete:webhook:bitbucket`
+  (the `/hook_events` catalog is public)
 - Account SSH keys: `read:ssh-key:bitbucket`, `write:ssh-key:bitbucket`, and
   `delete:ssh-key:bitbucket` for list/view, add/edit, and delete respectively
-- Repository deploy keys: the matching SSH-key scope plus
-  `admin:repository:bitbucket` for add/delete (deploy keys are read-only for
-  Git access)
+- Repository deploy keys: `admin:repository:bitbucket` for reads, plus
+  `write:ssh-key:bitbucket` or `delete:ssh-key:bitbucket` for mutations (deploy
+  keys are read-only for Git access)
 
 On a `403`, the CLI includes the endpoint's documented required scopes in the
 error so the token can be re-created with the right grants.

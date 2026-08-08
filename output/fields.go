@@ -177,6 +177,6 @@ var (
 	PermissionFields      = fields("type", "permission", "raw_permission", "user", "user.display_name", "user.nickname", "user.uuid", "user.account_id", "group", "group.name", "group.slug", "repository", "repository.name", "repository.full_name", "repository.uuid", "links", "before", "after", "before_raw", "after_raw", "changed", "operation", "target", "principal", "metadata", "metadata.workspace", "metadata.repository", "email")
 	WebhookFields         = fields("uuid", "description", "url", "active", "events", "created_at", "updated_at", "subject", "links")
 	WebhookEventFields    = fields("event")
-	SSHKeyFields          = fields("id", "key", "label", "algorithm", "fingerprint", "created_on", "last_used", "expires_at", "links", "scope")
-	DeployKeyFields       = fields("id", "key", "label", "algorithm", "fingerprint", "created_on", "last_used", "expires_at", "links", "scope")
+	SSHKeyFields          = fields("uuid", "id", "key", "label", "algorithm", "fingerprint", "created_on", "last_used", "expires_on", "links", "scope")
+	DeployKeyFields       = fields("uuid", "id", "key", "label", "algorithm", "fingerprint", "created_on", "last_used", "expires_on", "links", "scope")
 )

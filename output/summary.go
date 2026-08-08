@@ -467,10 +467,12 @@ func SSHKeySummary(key map[string]any) string {
 	fingerprint, _ := str(key, "fingerprint")
 	algorithm, _ := str(key, "algorithm")
 	id := "?"
-	if value, ok := key["id"]; ok {
+	if value, ok := key["uuid"]; ok {
+		id = fmt.Sprintf("%v", value)
+	} else if value, ok := key["id"]; ok {
 		id = fmt.Sprintf("%v", numberish(value))
 	}
-	return fmt.Sprintf("#%s %s %s %s", id, label, algorithm, fingerprint)
+	return fmt.Sprintf("%s %s %s %s", id, label, algorithm, fingerprint)
 }
 
 // DeployKeySummary makes the repository scope explicit to distinguish deploy
