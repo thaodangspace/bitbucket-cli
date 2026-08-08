@@ -93,6 +93,12 @@ func jsonFieldsForCommand(name string) string {
 		return "key,name,uuid,description,is_private,links,repositories"
 	case strings.HasPrefix(name, "permission"):
 		return "permission,user,group,repository,before,after,changed"
+	case strings.HasPrefix(name, "webhook events"):
+		return "event"
+	case strings.HasPrefix(name, "webhook"):
+		return "uuid,description,url,active,events,created_at,updated_at,subject"
+	case strings.HasPrefix(name, "ssh-key"), strings.HasPrefix(name, "deploy-key"):
+		return "id,label,algorithm,fingerprint,created_on,last_used,expires_at,scope"
 	default:
 		return ""
 	}
@@ -111,6 +117,15 @@ func commandMetadata(name string) (classification, scope string) {
 	}
 	if strings.HasPrefix(name, "permission") {
 		scope = "read:repository:bitbucket"
+	}
+	if strings.HasPrefix(name, "webhook") {
+		scope = "read:repository:bitbucket"
+	}
+	if strings.HasPrefix(name, "ssh-key") {
+		scope = "read:ssh-key:bitbucket"
+	}
+	if strings.HasPrefix(name, "deploy-key") {
+		scope = "read:ssh-key:bitbucket and admin:repository:bitbucket"
 	}
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
@@ -139,7 +154,7 @@ func commandMetadata(name string) (classification, scope string) {
 	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
 		return "write", "none (local git configuration)"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove", "pipeline run", "pipeline stop", "pipeline schedule create", "pipeline schedule edit", "pipeline schedule delete", "pipeline variable set", "pipeline variable delete", "pipeline cache delete", "pipeline runner create", "pipeline runner edit", "pipeline runner delete", "pipeline config enable", "pipeline config disable", "project create", "project edit", "project delete", "permission grant", "permission revoke", "workspace invite", "workspace remove-member"} {
+	for _, write := range []string{"webhook create", "webhook edit", "webhook delete", "webhook apply", "ssh-key add", "ssh-key edit", "ssh-key delete", "deploy-key add", "deploy-key delete", "pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove", "pipeline run", "pipeline stop", "pipeline schedule create", "pipeline schedule edit", "pipeline schedule delete", "pipeline variable set", "pipeline variable delete", "pipeline cache delete", "pipeline runner create", "pipeline runner edit", "pipeline runner delete", "pipeline config enable", "pipeline config disable", "project create", "project edit", "project delete", "permission grant", "permission revoke", "workspace invite", "workspace remove-member"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
@@ -173,6 +188,15 @@ func commandMetadata(name string) (classification, scope string) {
 			}
 			if strings.HasPrefix(name, "permission revoke") {
 				return "write", "admin:repository:bitbucket, delete:permission:bitbucket"
+			}
+			if strings.HasPrefix(name, "webhook ") {
+				return "write", "admin:repository:bitbucket"
+			}
+			if strings.HasPrefix(name, "ssh-key ") {
+				return "write", "write:ssh-key:bitbucket"
+			}
+			if strings.HasPrefix(name, "deploy-key ") {
+				return "write", "write:ssh-key:bitbucket and admin:repository:bitbucket"
 			}
 			if strings.HasPrefix(name, "workspace ") {
 				return "write", "admin:workspace:bitbucket"

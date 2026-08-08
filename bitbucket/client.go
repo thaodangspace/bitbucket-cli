@@ -45,6 +45,39 @@ func RequiredScopes(path string) string {
 // RequiredScopesFor returns the documented token scopes for an HTTP operation.
 func RequiredScopesFor(method, path string) string {
 	switch {
+	case strings.Contains(path, "/hook_events"):
+		if strings.Contains(path, "/workspaces/") {
+			return "read:workspace:bitbucket"
+		}
+		return "read:repository:bitbucket"
+	case strings.Contains(path, "/workspaces/") && strings.Contains(path, "/hooks"):
+		if method == http.MethodGet {
+			return "read:workspace:bitbucket"
+		}
+		return "admin:workspace:bitbucket"
+	case strings.Contains(path, "/hooks"):
+		if method == http.MethodGet {
+			return "read:repository:bitbucket"
+		}
+		return "admin:repository:bitbucket"
+	case strings.Contains(path, "/ssh-keys"):
+		switch method {
+		case http.MethodGet:
+			return "read:ssh-key:bitbucket"
+		case http.MethodDelete:
+			return "delete:ssh-key:bitbucket"
+		default:
+			return "write:ssh-key:bitbucket"
+		}
+	case strings.Contains(path, "/deploy-keys"):
+		switch method {
+		case http.MethodGet:
+			return "read:ssh-key:bitbucket and read:repository:bitbucket"
+		case http.MethodDelete:
+			return "delete:ssh-key:bitbucket and admin:repository:bitbucket"
+		default:
+			return "write:ssh-key:bitbucket and admin:repository:bitbucket"
+		}
 	case strings.Contains(path, "/permissions-config/"):
 		if method == http.MethodGet {
 			return "read:repository:bitbucket"
