@@ -78,8 +78,25 @@ func RequiredScopesFor(method, path string) string {
 			return "read:pullrequest:bitbucket"
 		}
 		return "admin:repository:bitbucket"
+	case strings.Contains(path, "/pipelines-config/variables") || (strings.Contains(path, "/deployments/") && strings.Contains(path, "/variables")):
+		if method == http.MethodGet {
+			return "read:pipeline:bitbucket"
+		}
+		return "admin:pipeline:bitbucket"
+	case strings.Contains(path, "/pipelines-config/runners"):
+		switch method {
+		case http.MethodGet:
+			return "read:runner:bitbucket"
+		case http.MethodPost, http.MethodPut:
+			return "read:runner:bitbucket and write:runner:bitbucket"
+		default:
+			return "write:runner:bitbucket"
+		}
 	case strings.Contains(path, "/pipeline"):
-		return "pipeline:read"
+		if method == http.MethodGet {
+			return "pipeline:read"
+		}
+		return "pipeline:write"
 	case strings.Contains(path, "/repositories/") && strings.HasSuffix(strings.Split(strings.Split(path, "?")[0], "/repositories/")[1], "/forks") && method == http.MethodPost:
 		return "read:repository:bitbucket and write:repository:bitbucket"
 	case repositoryResourcePath(path) && method == http.MethodPost:

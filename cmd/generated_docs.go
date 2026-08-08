@@ -69,7 +69,7 @@ func jsonFieldsForCommand(name string) string {
 		return "uuid,account_id,display_name,nickname,links"
 	case strings.HasPrefix(name, "branching-model"):
 		return "development,production,branch_types,default_branch_deletion"
-	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"):
+	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"), strings.HasPrefix(name, "pipeline watch"):
 		return "uuid,build_number,state,target,trigger,steps"
 	case strings.HasPrefix(name, "pr comments"), strings.HasPrefix(name, "pr comment"):
 		return "id,content,user,parent,inline,pending,resolution,created_on,updated_on"
@@ -100,6 +100,12 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
 	}
+	if strings.HasPrefix(name, "pipeline variable ") {
+		scope = "read:pipeline:bitbucket"
+	}
+	if strings.HasPrefix(name, "pipeline runner ") {
+		scope = "read:runner:bitbucket"
+	}
 	if strings.HasPrefix(name, "commit status") {
 		scope = "read:repository:bitbucket"
 	}
@@ -118,7 +124,7 @@ func commandMetadata(name string) (classification, scope string) {
 	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
 		return "write", "none (local git configuration)"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove", "pipeline run", "pipeline stop", "pipeline schedule create", "pipeline schedule edit", "pipeline schedule delete", "pipeline variable set", "pipeline variable delete", "pipeline cache delete", "pipeline runner create", "pipeline runner edit", "pipeline runner delete", "pipeline config enable", "pipeline config disable"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
@@ -131,6 +137,18 @@ func commandMetadata(name string) (classification, scope string) {
 			}
 			if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
 				return "write", "read:repository:bitbucket and write:repository:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline variable ") {
+				return "write", "admin:pipeline:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline runner create") || strings.HasPrefix(name, "pipeline runner edit") {
+				return "write", "read:runner:bitbucket and write:runner:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline runner delete") {
+				return "write", "write:runner:bitbucket"
+			}
+			if strings.HasPrefix(name, "pipeline ") {
+				return "write", "write:pipeline:bitbucket"
 			}
 			return "write", scope
 		}

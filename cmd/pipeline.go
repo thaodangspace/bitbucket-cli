@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
@@ -106,9 +105,12 @@ func init() {
 			stepsPath := fmt.Sprintf("%s/pipelines/%s/steps/?pagelen=%d", base, url.PathEscape(uuid), bitbucket.DefaultPageLen)
 			stepsRaw, err := client.Paginate(ctx(cmd), stepsPath, 200, bitbucket.DefaultMaxPages)
 			if err != nil {
-				// Steps fetch failed: still show pipeline data, but warn.
-				fmt.Fprintf(os.Stderr, "Warning: could not fetch steps: %v\n", err)
-				stepsRaw = nil
+				// Keep machine-readable output valid: warnings are part of the
+				// result rather than an unstructured stderr line.
+				return emitPipelineGetWithWarnings(pipelineRaw, nil, []map[string]any{{
+					"operation": "fetch_steps",
+					"error":     warningError(err),
+				}})
 			}
 
 			return emitPipelineGet(pipelineRaw, stepsRaw)
@@ -149,7 +151,21 @@ func resolvePipelineID(c context.Context, client *bitbucket.Client, base string,
 	return uuid, nil
 }
 
+func warningError(err error) map[string]any {
+	if httpErr, ok := err.(*bitbucket.HTTPError); ok {
+		return map[string]any{
+			"method": httpErr.Method, "url": httpErr.URL, "status": httpErr.Status,
+			"statusText": httpErr.StatusText, "excerpt": httpErr.Excerpt,
+		}
+	}
+	return map[string]any{"message": err.Error()}
+}
+
 func emitPipelineGet(pipelineRaw json.RawMessage, stepsRaw []json.RawMessage) error {
+	return emitPipelineGetWithWarnings(pipelineRaw, stepsRaw, nil)
+}
+
+func emitPipelineGetWithWarnings(pipelineRaw json.RawMessage, stepsRaw []json.RawMessage, warnings []map[string]any) error {
 	// Decode pipeline for both modes.
 	var pipeline map[string]any
 	if err := json.Unmarshal(pipelineRaw, &pipeline); err != nil {
@@ -169,6 +185,9 @@ func emitPipelineGet(pipelineRaw json.RawMessage, stepsRaw []json.RawMessage) er
 	// Include steps in the structured value so every output mode and transform
 	// sees the same response.
 	pipeline["steps"] = steps
+	if len(warnings) > 0 {
+		pipeline["warnings"] = warnings
+	}
 	return renderValue(pipeline, output.PipelineFields,
 		func(m map[string]any) string {
 			projectedSteps := steps
