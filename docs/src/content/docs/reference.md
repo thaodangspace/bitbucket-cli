@@ -35,6 +35,50 @@ Set a command alias
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli alias set <name> <command>`
 
+## `annotation`
+
+Manage Code Insights annotations
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli annotation`
+- JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
+
+## `annotation delete <commit> <report-id> <annotation-id>`
+
+Delete a report annotation
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli annotation delete <commit> <report-id> <annotation-id>`
+- JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
+
+Flags: `--yes` — Confirm deletion
+
+## `annotation list <commit> <report-id>`
+
+List report annotations
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli annotation list <commit> <report-id>`
+- JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
+
+Flags: `--limit` — Maximum annotations to return
+
+## `annotation upsert <commit> <report-id>`
+
+Create or update report annotations
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli annotation upsert <commit> <report-id>`
+
+> Warning: report payloads and annotations are visible to repository users with access; never include secrets.
+- JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
+
+Flags: `--file` — JSON annotation object or array
+
 ## `api <endpoint>`
 
 Make an arbitrary Bitbucket Cloud REST 2.0 request
@@ -99,6 +143,26 @@ Branch commands
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli branch`
 
+## `branch create <name> --target <commit|branch|tag>`
+
+Create a branch
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch create <name> --target <commit|branch|tag>`
+
+Flags: `--target` — Commit hash, branch, or tag to point at
+
+## `branch delete <name> --yes`
+
+Delete a branch
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch delete <name> --yes`
+
+Flags: `--yes` — Confirm deletion
+
 ## `branch list`
 
 List branches in a repository
@@ -106,9 +170,109 @@ List branches in a repository
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli branch list`
-- JSON fields: `name,target,links`
+- JSON fields: `name,target,links,requested_target,resolved_target`
 
-Flags: `--limit` — Maximum branches to return; `--query` — Bitbucket q expression, e.g. name ~ "feature/"
+Flags: `--limit` — Maximum branches to return; `--query` — Bitbucket q expression, e.g. name ~ "feature/"; `--sort` — Sort field, optionally prefixed with -
+
+## `branch view <name>`
+
+View a branch
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch view <name>`
+- JSON fields: `name,target,links,requested_target,resolved_target`
+
+## `branch-restriction`
+
+Branch restriction commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+## `branch-restriction create --kind <kind> (--pattern <glob>|--branch-type <type>)`
+
+Create a branch restriction
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction create --kind <kind> (--pattern <glob>|--branch-type <type>)`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--approvals` — Required approvals; `--branch-type` — Branching-model branch type; `--builds` — Required passing builds; `--from-file` — Read policy fields from YAML or JSON; `--group` — Group selector (repeatable); `--kind` — Restriction kind; `--pattern` — Glob pattern; `--user` — User selector (repeatable); `--value` — Kind-specific numeric requirement
+
+## `branch-restriction delete <id> --yes`
+
+Delete a branch restriction
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction delete <id> --yes`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--yes` — Confirm deletion
+
+## `branch-restriction edit <id> [flags]`
+
+Edit a branch restriction
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction edit <id> [flags]`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--approvals` — Required approvals; `--branch-type` — Branching-model branch type; `--builds` — Required passing builds; `--from-file` — Read policy fields from YAML or JSON; `--group` — Group selector (repeatable); `--kind` — Restriction kind; `--pattern` — Glob pattern; `--user` — User selector (repeatable); `--value` — Kind-specific numeric requirement
+
+## `branch-restriction list`
+
+List branch restrictions
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction list`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+Flags: `--branch-type` — Branching-model branch type; `--export` — Export restrictions to a YAML or JSON file (omit the value for stdout); `--kind` — Restriction kind; `--limit` — Maximum restrictions to return; `--pattern` — Glob pattern
+
+## `branch-restriction view <id>`
+
+View a branch restriction
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branch-restriction view <id>`
+- JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
+
+## `branching-model`
+
+Branching model commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branching-model`
+- JSON fields: `development,production,branch_types,default_branch_deletion`
+
+## `branching-model edit`
+
+Edit the repository branching model
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli branching-model edit`
+- JSON fields: `development,production,branch_types,default_branch_deletion`
+
+Flags: `--bugfix-prefix` — Bugfix branch prefix; `--development-branch` — Development branch name; `--development-use-main` — Make development track the main branch; `--disable-production` — Disable the production branch; `--disable` — Disable a branch type (repeatable: feature, bugfix, release, hotfix); `--enable-production` — Enable the production branch; `--enable` — Enable a branch type (repeatable: feature, bugfix, release, hotfix); `--feature-prefix` — Feature branch prefix; `--hotfix-prefix` — Hotfix branch prefix; `--production-branch` — Production branch name; `--release-prefix` — Release branch prefix
+
+## `branching-model view`
+
+View the repository branching model
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli branching-model view`
+- JSON fields: `development,production,branch_types,default_branch_deletion`
 
 ## `browse [path]`
 
@@ -119,6 +283,148 @@ Open the repository in a browser
 - Example: `bitbucket-cli browse [path]`
 
 Flags: `--branch` — Branch to view; `--no-browser` — Print the URL without opening a browser
+
+## `commit`
+
+Browse commits and commit checks
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit`
+
+## `commit approve <commit>`
+
+Approve a commit
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli commit approve <commit>`
+
+## `commit comment`
+
+Manage commit comments
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit comment`
+- JSON fields: `id,content,user,inline,created_on,updated_on`
+
+## `commit comment create <commit>`
+
+Create a commit comment
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli commit comment create <commit>`
+- JSON fields: `id,content,user,inline,created_on,updated_on`
+
+Flags: `--body-file` — Read the body from a file (- for stdin); `--body` — Markdown comment body; `--from` — Old-side line number; `--path` — File path for an inline comment; `--to` — New-side line number
+
+## `commit comment delete <commit> <comment-id>`
+
+Delete a commit comment
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli commit comment delete <commit> <comment-id>`
+- JSON fields: `id,content,user,inline,created_on,updated_on`
+
+Flags: `--yes` — Confirm deletion
+
+## `commit comment edit <commit> <comment-id>`
+
+Edit a commit comment
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli commit comment edit <commit> <comment-id>`
+- JSON fields: `id,content,user,inline,created_on,updated_on`
+
+Flags: `--body-file` — Read the replacement body from a file (- for stdin); `--body` — Replacement markdown body
+
+## `commit comment list <commit>`
+
+List comments on a commit
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit comment list <commit>`
+- JSON fields: `id,content,user,inline,created_on,updated_on`
+
+Flags: `--limit` — Maximum comments to return
+
+## `commit diff <commit-or-range>`
+
+Show a commit or range diff
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit diff <commit-or-range>`
+
+Range semantics: `A..B` follows Bitbucket's API semantics—commits reachable from B excluding commits reachable from A.
+
+Flags: `--context` — Number of context lines; `--name-only` — Show changed file names; `--patch` — Use Bitbucket's patch representation; `--stat` — Show diffstat
+
+## `commit list [<ref>]`
+
+List repository commits
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit list [<ref>]`
+- JSON fields: `hash,message,author,date,links,requested_selector,resolved_hash`
+
+Flags: `--exclude` — Exclude commits reachable from this ref (repeatable); `--include` — Include commits reachable from this ref (repeatable); `--limit` — Maximum commits to return; `--path` — Only commits affecting this path; `--query` — Bitbucket query expression (BBQL)
+
+## `commit status`
+
+Manage commit build statuses
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit status`
+- JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
+
+## `commit status list <commit>`
+
+List build statuses for a commit
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit status list <commit>`
+- JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
+
+Flags: `--limit` — Maximum statuses to return
+
+## `commit status set <commit>`
+
+Create or update a commit build status
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli commit status set <commit>`
+- JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
+
+Flags: `--description` — Status description; `--key` — Unique status key; `--name` — Status name; `--ref` — Reference name; `--state` — Status: INPROGRESS, SUCCESSFUL, FAILED, or STOPPED; `--url` — Build target URL
+
+## `commit unapprove <commit>`
+
+Remove your approval from a commit
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli commit unapprove <commit>`
+
+## `commit view <commit>`
+
+View a repository commit
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli commit view <commit>`
+- JSON fields: `hash,message,author,date,links,requested_selector,resolved_hash`
+
+Flags: `--comments` — Include commit comments; `--reports` — Include Code Insights reports; `--statuses` — Include commit build statuses; `--web` — Open the commit in a browser
 
 ## `completion bash|zsh|fish|powershell`
 
@@ -167,6 +473,44 @@ Set a config value, writing it to the config file
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli config set <key> <value>`
+
+## `default-reviewer`
+
+Default reviewer commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+## `default-reviewer add <user-selector>`
+
+Add a default reviewer
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer add <user-selector>`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+## `default-reviewer list`
+
+List default reviewers
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer list`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+## `default-reviewer remove <user-selector> --yes`
+
+Remove a default reviewer
+
+- Classification: **admin**
+- Required scopes: `admin:repository:bitbucket`
+- Example: `bitbucket-cli default-reviewer remove <user-selector> --yes`
+- JSON fields: `uuid,account_id,display_name,nickname,links`
+
+Flags: `--yes` — Confirm removal
 
 ## `pipeline`
 
@@ -877,6 +1221,59 @@ View a repository
 
 Flags: `--branch` — Branch or ref used for --readme; `--readme` — Print the repository README; `--web` — Open the repository in a browser
 
+## `report`
+
+Manage Code Insights reports
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli report`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
+
+## `report delete <commit> <report-id>`
+
+Delete a Code Insights report
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli report delete <commit> <report-id>`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
+
+Flags: `--yes` — Confirm deletion
+
+## `report list <commit>`
+
+List reports for a commit
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli report list <commit>`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
+
+Flags: `--limit` — Maximum reports to return
+
+## `report upsert <commit> <report-id>`
+
+Create or update a Code Insights report
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Example: `bitbucket-cli report upsert <commit> <report-id>`
+
+> Warning: report payloads and annotations are visible to repository users with access; never include secrets.
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
+
+Flags: `--data-file` — JSON report fields; `--details` — Report details; `--result` — Result: PASSED, FAILED, or PENDING; `--title` — Report title
+
+## `report view <commit> <report-id>`
+
+View a Code Insights report
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli report view <commit> <report-id>`
+- JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
+
 ## `status`
 
 Check bitbucket-cli configuration
@@ -884,3 +1281,51 @@ Check bitbucket-cli configuration
 - Classification: **read**
 - Required scopes: `read:repository:bitbucket`
 - Example: `bitbucket-cli status`
+
+## `tag`
+
+Tag commands
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag`
+
+## `tag create <name> --target <commit|branch>`
+
+Create a tag
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag create <name> --target <commit|branch>`
+
+Flags: `--message` — Annotated tag message (Bitbucket creates an annotated tag and supplies a default when omitted); `--target` — Commit hash or branch to point at
+
+## `tag delete <name> --yes`
+
+Delete a tag
+
+- Classification: **write**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag delete <name> --yes`
+
+Flags: `--yes` — Confirm deletion
+
+## `tag list`
+
+List tags in a repository
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag list`
+- JSON fields: `name,target,message,links,requested_target,resolved_target`
+
+Flags: `--limit` — Maximum tags to return; `--query` — Bitbucket q expression; `--sort` — Sort field, optionally prefixed with -
+
+## `tag view <name>`
+
+View a tag
+
+- Classification: **read**
+- Required scopes: `read:repository:bitbucket`
+- Example: `bitbucket-cli tag view <name>`
+- JSON fields: `name,target,message,links,requested_target,resolved_target`

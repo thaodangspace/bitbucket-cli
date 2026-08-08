@@ -123,10 +123,27 @@ Do not run `pr comment`, `pr review`, `pr unapprove`,
 unless the user explicitly asked for the remote change.
 :::
 
-## Branches and pipelines
+## Branches, tags, policies, and pipelines
 
 ```sh
-bitbucket-cli branch list [--query QUERY] [--limit N]
+bitbucket-cli branch list [--query QUERY] [--sort FIELD] [--limit N]
+bitbucket-cli branch view <name>
+bitbucket-cli branch create <name> --target <commit|branch|tag>
+bitbucket-cli branch delete <name> --yes
+bitbucket-cli tag list [--query QUERY] [--sort FIELD] [--limit N]
+bitbucket-cli tag view <name>
+bitbucket-cli tag create <name> --target <commit|branch> [--message TEXT]
+bitbucket-cli tag delete <name> --yes
+bitbucket-cli branching-model view
+bitbucket-cli branching-model edit [--production-branch BRANCH] [--development-branch BRANCH] [--feature-prefix PREFIX]
+bitbucket-cli branch-restriction list [--kind KIND] [--pattern GLOB|--branch-type TYPE]
+bitbucket-cli branch-restriction view <id>
+bitbucket-cli branch-restriction create --kind KIND (--pattern GLOB|--branch-type TYPE) [--value N]
+bitbucket-cli branch-restriction edit <id> [--from-file POLICY.yaml]
+bitbucket-cli branch-restriction delete <id> --yes
+bitbucket-cli default-reviewer list
+bitbucket-cli default-reviewer add <user-selector>
+bitbucket-cli default-reviewer remove <user-selector> --yes
 bitbucket-cli pipeline list [--state STATE] [--limit N]
 bitbucket-cli pipeline get <uuid> [--web]
 bitbucket-cli browse [path] [--branch BRANCH] [--no-browser]
@@ -135,6 +152,19 @@ bitbucket-cli alias set <name> <command>
 bitbucket-cli alias delete <name>
 bitbucket-cli alias list
 ```
+
+Branch and tag mutations resolve branch/tag targets to an immutable commit hash,
+reject existing refs, and URL-encode names as a single path segment. Branch
+creation reports both `requested_target` and `resolved_target`; tag messages
+request annotated tags; Bitbucket supplies a default message when `--message`
+is omitted, and this API does not provide a lightweight-tag mode. Branch deletion always requires `--yes` and refuses the configured
+main branch.
+
+Branch restrictions use typed match modes: exactly one glob `--pattern` or
+branching-model `--branch-type`. Approval/build restrictions require `--value`
+(or `--approvals`/`--builds`); `--from-file` accepts YAML or JSON and `--export`
+writes a secret-free reproducible policy file. User and group display-name
+selectors must resolve uniquely.
 
 Pipeline states include `PENDING`, `IN_PROGRESS`, `COMPLETED`, `PAUSED`,
 `HALTED`, and `ERROR`.

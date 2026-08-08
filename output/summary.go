@@ -95,6 +95,62 @@ func BranchSummary(branch map[string]any) string {
 	return "unknown"
 }
 
+// TagSummary renders a tag name, falling back to its target hash.
+func TagSummary(tag map[string]any) string {
+	if name, ok := str(tag, "name"); ok && name != "" {
+		return name
+	}
+	if target, ok := tag["target"].(map[string]any); ok {
+		if hash, ok := str(target, "hash"); ok && hash != "" {
+			return hash
+		}
+	}
+	return "unknown"
+}
+
+// RestrictionSummary renders a concise policy rule.
+func RestrictionSummary(rule map[string]any) string {
+	kind, _ := str(rule, "kind")
+	match, _ := str(rule, "pattern")
+	if match == "" {
+		match, _ = str(rule, "branch_type")
+	}
+	id := "?"
+	if value, ok := rule["id"]; ok {
+		id = fmt.Sprintf("%v", numberish(value))
+	}
+	if value, ok := rule["value"]; ok {
+		return fmt.Sprintf("#%s %s %s (%v)", id, kind, match, numberish(value))
+	}
+	return fmt.Sprintf("#%s %s %s", id, kind, match)
+}
+
+// AccountSummary renders an account selector without exposing credentials.
+func AccountSummary(account map[string]any) string {
+	for _, key := range []string{"display_name", "nickname", "account_id", "uuid"} {
+		if value, ok := str(account, key); ok && value != "" {
+			return value
+		}
+	}
+	return "unknown"
+}
+
+// BranchingModelSummary renders the effective production and development branches.
+func BranchingModelSummary(model map[string]any) string {
+	branchName := func(key string) string {
+		if branch, ok := model[key].(map[string]any); ok {
+			if name, ok := str(branch, "name"); ok && name != "" {
+				return name
+			}
+			if use, ok := branch["use_mainbranch"].(bool); ok && use {
+				return "<main>"
+			}
+		}
+		return "-"
+	}
+	return fmt.Sprintf("production=%s development=%s", branchName("production"), branchName("development"))
+}
+
 // PipelineSummary renders "#<build_number> <state> [<result>] <branch> <trigger> <duration>".
 // For running pipelines (no result), the result field is omitted.
 // Duration is formatted as "XmYs" or "Ys" or "-" when unavailable.
@@ -302,4 +358,41 @@ func numberish(v any) any {
 		return int64(f)
 	}
 	return v
+}
+
+// CommitStatusSummary renders the state, key, name, and target URL.
+func CommitStatusSummary(status map[string]any) string {
+	state, _ := str(status, "state")
+	if state == "" {
+		state = "UNKNOWN"
+	}
+	key, _ := str(status, "key")
+	name, _ := str(status, "name")
+	target, _ := str(status, "url")
+	updated, _ := str(status, "updated_on")
+	return fmt.Sprintf("[%s] %s %s %s %s", state, key, name, updated, target)
+}
+
+// ReportSummary renders a concise Code Insights report line.
+func ReportSummary(report map[string]any) string {
+	title, _ := str(report, "title")
+	result, _ := str(report, "result")
+	if result == "" {
+		result = "UNKNOWN"
+	}
+	return fmt.Sprintf("[%s] %s", result, title)
+}
+
+// AnnotationSummary renders a concise Code Insights annotation line.
+func AnnotationSummary(annotation map[string]any) string {
+	path, _ := str(annotation, "path")
+	if path == "" {
+		path, _ = str(annotation, "file_path")
+	}
+	line := annotation["line"]
+	summary, _ := str(annotation, "summary")
+	if summary == "" {
+		summary, _ = str(annotation, "message")
+	}
+	return fmt.Sprintf("%s:%v %s", path, numberish(line), summary)
 }

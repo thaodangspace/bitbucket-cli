@@ -45,14 +45,39 @@ func RequiredScopes(path string) string {
 // RequiredScopesFor returns the documented token scopes for an HTTP operation.
 func RequiredScopesFor(method, path string) string {
 	switch {
+	case strings.Contains(path, "/reports") || strings.Contains(path, "/annotations"):
+		if method == http.MethodGet {
+			return "read:repository:bitbucket"
+		}
+		return "read:repository:bitbucket and write:repository:bitbucket"
+	case strings.Contains(path, "/statuses"):
+		if method == http.MethodGet {
+			return "read:repository:bitbucket"
+		}
+		return "read:repository:bitbucket and write:repository:bitbucket"
+	case strings.Contains(path, "/commit/") && (strings.Contains(path, "/approve") || strings.Contains(path, "/comments")):
+		if method == http.MethodGet {
+			return "read:repository:bitbucket"
+		}
+		return "read:repository:bitbucket and write:repository:bitbucket"
 	case strings.Contains(path, "/downloads"):
 		return "write:repository:bitbucket"
 	case strings.Contains(path, "/pullrequests") && method != http.MethodGet:
 		return "read:pullrequest:bitbucket and write:pullrequest:bitbucket"
 	case strings.Contains(path, "/pullrequests"):
 		return "read:pullrequest:bitbucket"
-	case strings.Contains(path, "/refs/branches"), strings.Contains(path, "/commits"):
-		return "repository:read"
+	case strings.Contains(path, "/refs/branches"), strings.Contains(path, "/refs/tags"), strings.Contains(path, "/commits"):
+		if method == http.MethodGet {
+			return "read:repository:bitbucket"
+		}
+		return "write:repository:bitbucket"
+	case strings.Contains(path, "/branch-restrictions"), strings.Contains(path, "/branching-model/settings"):
+		return "admin:repository:bitbucket"
+	case strings.Contains(path, "/default-reviewers"):
+		if method == http.MethodGet {
+			return "read:pullrequest:bitbucket"
+		}
+		return "admin:repository:bitbucket"
 	case strings.Contains(path, "/pipeline"):
 		if method == http.MethodGet {
 			return "pipeline:read"

@@ -31,6 +31,12 @@ func GenerateCommandMarkdown() string {
 			b.WriteString(fmt.Sprintf("## `%s`\n\n%s\n\n", fullName, strings.TrimSpace(child.Short)))
 			classification, scope := commandMetadata(fullName)
 			b.WriteString(fmt.Sprintf("- Classification: **%s**\n- Required scopes: `%s`\n- Example: `%s`\n", classification, scope, "bitbucket-cli "+fullName))
+			if strings.HasPrefix(fullName, "report upsert") || strings.HasPrefix(fullName, "annotation upsert") {
+				b.WriteString("\n> Warning: report payloads and annotations are visible to repository users with access; never include secrets.\n")
+			}
+			if strings.HasPrefix(fullName, "commit diff") {
+				b.WriteString("\nRange semantics: `A..B` follows Bitbucket's API semantics—commits reachable from B excluding commits reachable from A.\n")
+			}
 			if fields := jsonFieldsForCommand(fullName); fields != "" {
 				b.WriteString("- JSON fields: `" + fields + "`\n")
 			}
@@ -53,14 +59,32 @@ func jsonFieldsForCommand(name string) string {
 	switch {
 	case strings.HasPrefix(name, "pr list"), strings.HasPrefix(name, "pr get"), strings.HasPrefix(name, "pr view"), strings.HasPrefix(name, "pr status"), strings.HasPrefix(name, "pr current"):
 		return "id,title,state,author,source,destination,reviewers"
-	case strings.HasPrefix(name, "branch list"):
-		return "name,target,links"
+	case strings.HasPrefix(name, "branch list"), strings.HasPrefix(name, "branch view"), strings.HasPrefix(name, "branch get"):
+		return "name,target,links,requested_target,resolved_target"
+	case strings.HasPrefix(name, "tag list"), strings.HasPrefix(name, "tag view"), strings.HasPrefix(name, "tag get"):
+		return "name,target,message,links,requested_target,resolved_target"
+	case strings.HasPrefix(name, "branch-restriction"):
+		return "id,kind,branch_match_kind,pattern,branch_type,value,users,groups"
+	case strings.HasPrefix(name, "default-reviewer"):
+		return "uuid,account_id,display_name,nickname,links"
+	case strings.HasPrefix(name, "branching-model"):
+		return "development,production,branch_types,default_branch_deletion"
 	case strings.HasPrefix(name, "pipeline list"), strings.HasPrefix(name, "pipeline get"), strings.HasPrefix(name, "pipeline watch"):
 		return "uuid,build_number,state,target,trigger,steps"
 	case strings.HasPrefix(name, "pr comments"), strings.HasPrefix(name, "pr comment"):
 		return "id,content,user,parent,inline,pending,resolution,created_on,updated_on"
 	case strings.HasPrefix(name, "pr task list"):
 		return "id,content,state,comment,creator,pending,resolved_on,resolved_by,created_on,updated_on"
+	case strings.HasPrefix(name, "commit list"), strings.HasPrefix(name, "commit view"):
+		return "hash,message,author,date,links,requested_selector,resolved_hash"
+	case strings.HasPrefix(name, "commit comment"):
+		return "id,content,user,inline,created_on,updated_on"
+	case strings.HasPrefix(name, "commit status"):
+		return "key,state,name,description,url,refname,created_on,updated_on"
+	case strings.HasPrefix(name, "report"):
+		return "uuid,title,details,result,reporter,report_type,data,created_on,updated_on"
+	case strings.HasPrefix(name, "annotation"):
+		return "external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link"
 	case strings.HasPrefix(name, "repo list"), strings.HasPrefix(name, "repo view"), strings.HasPrefix(name, "repo get"), strings.HasPrefix(name, "repo create"), strings.HasPrefix(name, "repo edit"), strings.HasPrefix(name, "repo fork"):
 		return "uuid,full_name,name,is_private,mainbranch,links"
 	default:
@@ -76,7 +100,13 @@ func commandMetadata(name string) (classification, scope string) {
 	if strings.HasPrefix(name, "pipeline ") {
 		scope = "read:pipeline:bitbucket"
 	}
-	if name == "repo create" || strings.HasPrefix(name, "repo create ") || name == "repo edit [<workspace/repo>]" || strings.HasPrefix(name, "repo edit ") {
+	if strings.HasPrefix(name, "commit status") {
+		scope = "read:repository:bitbucket"
+	}
+	if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
+		scope = "read:repository:bitbucket"
+	}
+	if strings.HasPrefix(name, "branching-model edit") || strings.HasPrefix(name, "branch-restriction create") || strings.HasPrefix(name, "branch-restriction edit") || strings.HasPrefix(name, "branch-restriction delete") || strings.HasPrefix(name, "default-reviewer add") || strings.HasPrefix(name, "default-reviewer remove") || name == "repo create" || strings.HasPrefix(name, "repo create ") || name == "repo edit [<workspace/repo>]" || strings.HasPrefix(name, "repo edit ") {
 		return "admin", "admin:repository:bitbucket"
 	}
 	if name == "repo delete [<workspace/repo>]" || strings.HasPrefix(name, "repo delete ") {
@@ -88,10 +118,19 @@ func commandMetadata(name string) (classification, scope string) {
 	if name == "repo set-default [<workspace/repo>]" || strings.HasPrefix(name, "repo set-default ") {
 		return "write", "none (local git configuration)"
 	}
-	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "auth login", "auth logout", "alias set", "alias delete", "pipeline run", "pipeline stop", "pipeline schedule create", "pipeline schedule edit", "pipeline schedule delete", "pipeline variable set", "pipeline variable delete", "pipeline cache delete", "pipeline runner create", "pipeline runner edit", "pipeline runner delete", "pipeline config enable", "pipeline config disable"} {
+	for _, write := range []string{"pr checkout", "pr comment", "pr attach", "pr create", "pr update", "pr review", "pr unapprove", "pr remove-change-request", "pr thread", "pr task create", "pr task update", "pr task delete", "pr merge", "pr decline", "pr reopen", "commit comment create", "commit comment edit", "commit comment delete", "commit approve", "commit unapprove", "commit status set", "report upsert", "report delete", "annotation upsert", "annotation delete", "auth login", "auth logout", "alias set", "alias delete", "branch create", "branch delete", "tag create", "tag delete", "branching-model edit", "branch-restriction create", "branch-restriction edit", "branch-restriction delete", "default-reviewer add", "default-reviewer remove", "pipeline run", "pipeline stop", "pipeline schedule create", "pipeline schedule edit", "pipeline schedule delete", "pipeline variable set", "pipeline variable delete", "pipeline cache delete", "pipeline runner create", "pipeline runner edit", "pipeline runner delete", "pipeline config enable", "pipeline config disable"} {
 		if name == write || strings.HasPrefix(name, write+" ") {
 			if strings.HasPrefix(name, "pr ") {
 				return "write", "read:pullrequest:bitbucket, write:pullrequest:bitbucket"
+			}
+			if strings.HasPrefix(name, "commit status") {
+				return "write", "read:repository:bitbucket and write:repository:bitbucket"
+			}
+			if strings.HasPrefix(name, "commit comment") || strings.HasPrefix(name, "commit approve") || strings.HasPrefix(name, "commit unapprove") {
+				return "write", "read:repository:bitbucket and write:repository:bitbucket"
+			}
+			if strings.HasPrefix(name, "report") || strings.HasPrefix(name, "annotation") {
+				return "write", "read:repository:bitbucket and write:repository:bitbucket"
 			}
 			if strings.HasPrefix(name, "pipeline ") {
 				return "write", "write:pipeline:bitbucket"
