@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -574,4 +576,171 @@ func captureRun(fn func() error) (string, error) {
 		}
 	}
 	return sb.String(), err
+}
+
+// availabilityStub wraps a MemoryStore with a configurable Availability() and
+// optional Set() failure so tests exercise the login availability gate and the
+// "no partial profile" contract without touching a real store.
+type availabilityStub struct {
+	*auth.MemoryStore
+	availErr error
+	setErr   error
+}
+
+func (s *availabilityStub) Available() error { return s.availErr }
+
+func (s *availabilityStub) Set(account, secret string) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
+	return s.MemoryStore.Set(account, secret)
+}
+
+// deleteRecorder records every Delete so tests can assert rollback behavior.
+type deleteRecorder struct {
+	*auth.MemoryStore
+	deleted []string
+}
+
+func (r *deleteRecorder) Delete(account string) error {
+	r.deleted = append(r.deleted, account)
+	return r.MemoryStore.Delete(account)
+}
+
+// chmodReadOnly makes a file unwritable so config writes fail deterministically.
+// It is skipped when running as root, which can write anyway.
+func chmodReadOnly(t *testing.T, path string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions do not block root")
+	}
+	if err := os.Chmod(path, 0o400); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAuthLoginAvailabilityFailureLeavesNoProfile(t *testing.T) {
+	cfgPath := t.TempDir() + "/cfg.yaml"
+	store := &availabilityStub{
+		MemoryStore: auth.NewMemoryStore(),
+		availErr:    fmt.Errorf("%w: no keyring", auth.ErrStoreUnavailable),
+	}
+	withStdin(t, "tok-secret\n", func() {
+		_, err := runAtStore(t, store, authUserTransport("acct-1"), cfgPath,
+			"auth", "login", "--email", "dev@example.com", "--with-token")
+		if err == nil {
+			t.Fatal("expected login to fail when the store is unavailable")
+		}
+		if !errors.Is(err, auth.ErrStoreUnavailable) {
+			t.Fatalf("error = %v, want ErrStoreUnavailable", err)
+		}
+	})
+	fc, err := config.LoadFileConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fc.Email != "" || fc.TokenType != "" || fc.APIToken != "" {
+		t.Fatalf("login mutated the profile despite an unavailable store: %+v", fc)
+	}
+	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
+		t.Fatalf("login should not create a config file when the store is unavailable")
+	}
+	if _, err := store.Get("dev@example.com"); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatalf("token must not be persisted when the store is unavailable: %v", err)
+	}
+}
+
+func TestAuthLoginStoreSetFailureLeavesNoPartialProfile(t *testing.T) {
+	cfgPath := t.TempDir() + "/cfg.yaml"
+	store := &availabilityStub{
+		MemoryStore: auth.NewMemoryStore(),
+		setErr:      errors.New(auth.ErrStoreUnavailable.Error() + ": daemon down"),
+	}
+	withStdin(t, "tok-secret\n", func() {
+		_, err := runAtStore(t, store, authUserTransport("acct-2"), cfgPath,
+			"auth", "login", "--email", "dev@example.com", "--with-token")
+		if err == nil {
+			t.Fatal("expected login to fail when the secret write fails")
+		}
+	})
+	fc, err := config.LoadFileConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fc.Email != "" || fc.TokenType != "" || fc.APIToken != "" {
+		t.Fatalf("half-written profile after store failure: %+v", fc)
+	}
+	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
+		t.Fatalf("login must not create a config file when the secret cannot be stored")
+	}
+}
+
+func TestAuthLoginRollsBackSecretWhenConfigWriteFails(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := os.WriteFile(cfgPath, []byte("email: old@example.com\ntoken_type: api\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	chmodReadOnly(t, cfgPath) // forces config.WriteFileConfig to fail
+
+	store := &deleteRecorder{MemoryStore: auth.NewMemoryStore()}
+	withStdin(t, "tok-secret\n", func() {
+		_, err := runAtStore(t, store, authUserTransport("acct-3"), cfgPath,
+			"auth", "login", "--email", "dev@example.com", "--with-token")
+		if err == nil {
+			t.Fatal("expected login to fail when the config write fails")
+		}
+	})
+	if len(store.deleted) != 1 || store.deleted[0] != "dev@example.com" {
+		t.Fatalf("expected rollback delete of the new secret, deleted=%v", store.deleted)
+	}
+	if _, err := store.Get("dev@example.com"); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatalf("secret should be rolled back after config failure: %v", err)
+	}
+	b, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(b), "email: old@example.com") {
+		t.Fatalf("previous profile must be preserved on failure: %s", b)
+	}
+	if strings.Contains(string(b), "tok-secret") {
+		t.Fatalf("token leaked into plaintext config: %s", b)
+	}
+}
+
+func TestMigrationBlocksOnUnavailableStoreKeepingPlaintext(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "cfg.yaml")
+	if err := os.WriteFile(cfgPath, []byte("email: dev@example.com\napi_token: plaintext-abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := &availabilityStub{
+		MemoryStore: auth.NewMemoryStore(),
+		availErr:    errors.New(auth.ErrStoreUnavailable.Error()),
+	}
+	if _, err := config.MigrateLegacyToken(cfgPath, store); err == nil {
+		t.Fatal("expected migration to fail when the store is unavailable")
+	}
+	b, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(b), "api_token: plaintext-abc") {
+		t.Fatalf("plaintext token must not be removed until secure write succeeds: %s", b)
+	}
+}
+
+func TestMigrationRollsBackSecretWhenConfigWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "cfg.yaml")
+	if err := os.WriteFile(cfgPath, []byte("email: dev@example.com\napi_token: plaintext-abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	chmodReadOnly(t, cfgPath) // secret-tool writes go to memory, the config write fails
+
+	store := &deleteRecorder{MemoryStore: auth.NewMemoryStore()}
+	if _, err := config.MigrateLegacyToken(cfgPath, store); err == nil {
+		t.Fatal("expected migration to fail when the config write fails")
+	}
+	if _, err := store.Get("dev@example.com"); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatalf("secret should be rolled back after config write failure: %v", err)
+	}
+	b, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(b), "api_token: plaintext-abc") {
+		t.Fatalf("plaintext token must remain when migration fails: %s", b)
+	}
 }

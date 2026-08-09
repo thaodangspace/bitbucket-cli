@@ -45,8 +45,7 @@ auto-detection**.
 ### Auth command (recommended)
 
 The `gh`-style `auth` workflow validates your credential against Bitbucket and
-stores the token in the OS credential store (macOS Keychain) instead of
-plaintext:
+stores the token in the OS credential store instead of plaintext:
 
 ```bash
 bitbucket-cli auth login                 # interactive (TTY)
@@ -55,6 +54,18 @@ bitbucket-cli auth status                # account, source, token type, repo acc
 bitbucket-cli auth logout                # remove the stored profile (--yes when stdin is not a TTY)
 bitbucket-cli auth token                 # opt-in: print the token for scripts
 ```
+
+The credential store is chosen by platform:
+- **macOS**: the Keychain (`security` command).
+- **Linux**: the Secret Service / desktop keyring (`secret-tool` from libsecret;
+  requires a `gnome-keyring`/KWallet session).
+- **Other platforms** (or a Linux session with no keyring daemon): `auth login`
+  fails with a clear "credential store unavailable" message instead of falling
+  back to plaintext.
+
+On headless machines — CI runners, containers, servers — use the environment
+credentials below rather than `auth login`. Tokens are never written to the
+YAML config file.
 
 `--token-type api|access|oauth` selects API tokens (default), Bitbucket access
 tokens, or OAuth bearer tokens. API tokens use HTTP Basic with the Atlassian

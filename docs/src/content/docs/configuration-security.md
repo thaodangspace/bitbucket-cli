@@ -18,10 +18,27 @@ bitbucket-cli auth token                 # opt-in token output for scripting
 
 API and OAuth login validates credentials with `GET /2.0/user`; access-token
 login probes the selected/default repository before persisting anything. Tokens
-are stored in the OS credential store (macOS Keychain); the YAML config file
-keeps only non-secret profile data (`email`, `token_type`, defaults, and a
-profile-specific `credential_key` for bearer tokens). API-token entries remain
-keyed by email for compatibility.
+are stored in the OS credential store; the YAML config file keeps only
+non-secret profile data (`email`, `token_type`, defaults, and a profile-specific
+`credential_key` for bearer tokens). API-token entries remain keyed by email for
+compatibility.
+
+The credential store is selected by platform:
+
+- **macOS**: the Keychain via the `security` binary (default, unchanged).
+- **Linux**: the freedesktop Secret Service / desktop keyring via `secret-tool`
+  from libsecret. This needs a running keyring session (GNOME Keyring or
+  KWallet) on the session bus.
+- **Anything else**: no secure backend exists — operations fail with a
+  `credential store unavailable` error.
+
+On a headless Linux server or unsupported platform, `auth login` fails up front
+with an actionable message and suggests `BITBUCKET_API_TOKEN` /
+`BITBUCKET_EMAIL`. Login never silently falls back to plaintext storage, and a
+failed persistence never leaves a half-written profile: the secure write is
+rolled back if the config write later fails, and the legacy plaintext migration
+removes nothing until the secure write has succeeded.
+
 `--with-token` is required when stdin is not a TTY; the CLI refuses to read an
 interactive token from a pipe.
 
@@ -120,7 +137,9 @@ authorization guidance without a guessed credential-specific scope.
 ## CI and automation
 
 Environment variables remain the highest-precedence, non-interactive override
-and require no keychain access. `BITBUCKET_HTTP_TIMEOUT` (or the config-file
+and require no keychain or Secret Service session. CI runners and containers
+rarely have a desktop keyring daemon; use environment credentials there rather
+than `auth login`. `BITBUCKET_HTTP_TIMEOUT` (or the config-file
 `http_timeout` key) sets the ordinary request deadline, defaulting to 30 seconds;
 use a duration such as `2m` or an explicit `0` to disable the total deadline.
 Streaming requests, including pipeline log follow, ignore this total deadline

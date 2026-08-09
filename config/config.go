@@ -415,8 +415,10 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 
 // MigrateLegacyToken moves a plaintext api_token from the YAML config file into
 // the secret store and removes it from the file, preserving every other key.
-// It reports whether a migration happened. The migration is one-time: after a
-// successful write the file no longer contains api_token.
+// It reports whether a migration happened. The migration is one-time: the
+// plaintext token is only removed after the secure write succeeds, and a failed
+// config-file write rolls back the just-stored secret so no token is stranded
+// in two places.
 func MigrateLegacyToken(path string, store auth.SecretStore) (bool, error) {
 	fc, err := LoadFileConfig(path)
 	if err != nil {
@@ -430,11 +432,19 @@ func MigrateLegacyToken(path string, store auth.SecretStore) (bool, error) {
 	if email == "" {
 		return false, fmt.Errorf("cannot migrate api_token to the credential store: config file %s has no email", path)
 	}
+	if av, ok := store.(auth.AvailabilityStore); ok {
+		if err := av.Available(); err != nil {
+			return false, err
+		}
+	}
 	if err := store.Set(email, token); err != nil {
 		return false, fmt.Errorf("save token to credential store: %w", err)
 	}
 	fc.APIToken = ""
 	if err := WriteFileConfig(path, fc); err != nil {
+		if rbErr := store.Delete(email); rbErr != nil {
+			return false, fmt.Errorf("remove plaintext token from %s: %w (additionally failed to roll back the just-saved secret: %v)", path, err, rbErr)
+		}
 		return false, fmt.Errorf("remove plaintext token from %s: %w", path, err)
 	}
 	return true, nil
