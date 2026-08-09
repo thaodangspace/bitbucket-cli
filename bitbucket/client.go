@@ -479,11 +479,16 @@ func (c *Client) Do(ctx context.Context, pathOrURL string, opts RequestOptions) 
 	requestCtx := ctx
 	var cancel context.CancelFunc
 	if !opts.Streaming && c.requestTimeout > 0 {
-		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-			requestCtx, cancel = context.WithTimeout(ctx, c.requestTimeout)
-			defer cancel()
-		}
+		// WithTimeout uses the earlier of the parent deadline and this
+		// operation timeout, so caller cancellation is never extended.
+		requestCtx, cancel = context.WithTimeout(ctx, c.requestTimeout)
 	}
+	keepContext := false
+	defer func() {
+		if cancel != nil && !keepContext {
+			cancel()
+		}
+	}()
 
 	attempts := 1
 	if isIdempotent(method) {
@@ -526,6 +531,12 @@ func (c *Client) Do(ctx context.Context, pathOrURL string, opts RequestOptions) 
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if cancel != nil {
+				// The request context also controls response-body reads. Keep
+				// it alive until the caller finishes with the body.
+				resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
+			}
+			keepContext = true
 			return &Response{StatusCode: resp.StatusCode, Header: resp.Header, Body: resp.Body}, nil
 		}
 
@@ -575,6 +586,24 @@ func retryAfterDelay(value string) time.Duration {
 type UploadFile struct {
 	Path string
 	Name string
+}
+
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnCloseBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err != nil {
+		b.cancel()
+	}
+	return n, err
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	b.cancel()
+	return b.ReadCloser.Close()
 }
 
 func configureTransport(client *http.Client) {

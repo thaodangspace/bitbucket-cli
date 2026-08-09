@@ -9,6 +9,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -549,6 +550,23 @@ func TestDoRespectsCallerDeadline(t *testing.T) {
 	}
 }
 
+func TestDoConfiguredDeadlineBeatsLongerCallerDeadline(t *testing.T) {
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		})}),
+		WithRequestTimeout(20*time.Millisecond),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := c.Do(ctx, "/stalled", RequestOptions{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want configured deadline exceeded", err)
+	}
+}
+
 func TestDoRetryBackoffHonorsOverallTimeout(t *testing.T) {
 	calls := 0
 	c := NewClient(nil,
@@ -565,6 +583,62 @@ func TestDoRetryBackoffHonorsOverallTimeout(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("retry should be blocked by overall deadline, calls=%d", calls)
+	}
+}
+
+func TestDoReadsDelayedBodyBeforeTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.(http.Flusher).Flush()
+		time.Sleep(30 * time.Millisecond)
+		_, _ = io.WriteString(w, "delayed body")
+	}))
+	defer server.Close()
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		forwarded := r.Clone(r.Context())
+		u := *target
+		forwarded.URL = &u
+		forwarded.Host = target.Host
+		return http.DefaultTransport.RoundTrip(forwarded)
+	})
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: transport}),
+		WithRequestTimeout(200*time.Millisecond),
+	)
+	resp, err := c.Do(context.Background(), "/delayed", RequestOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if string(body) != "delayed body" {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestDoTimesOutStalledResponseBody(t *testing.T) {
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: contextReadCloser{ctx: r.Context()}}, nil
+		})}),
+		WithRequestTimeout(20*time.Millisecond),
+	)
+	resp, err := c.Do(context.Background(), "/stalled-body", RequestOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_, err = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("body error = %v, want deadline exceeded", err)
 	}
 }
 
