@@ -705,6 +705,34 @@ func TestAuthLoginRollsBackSecretWhenConfigWriteFails(t *testing.T) {
 	}
 }
 
+func TestAuthLoginRollbackRestoresPreviousSecret(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := os.WriteFile(cfgPath, []byte("email: old@example.com\ntoken_type: api\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	chmodReadOnly(t, cfgPath) // forces config.WriteFileConfig to fail
+
+	// Re-login to the same account reuses the same store key: the previous
+	// token must be restored, never deleted, when the profile write fails.
+	store := &deleteRecorder{MemoryStore: auth.NewMemoryStore()}
+	if err := store.MemoryStore.Set("dev@example.com", "old-secret"); err != nil {
+		t.Fatal(err)
+	}
+	withStdin(t, "tok-secret\n", func() {
+		_, err := runAtStore(t, store, authUserTransport("acct-4"), cfgPath,
+			"auth", "login", "--email", "dev@example.com", "--with-token")
+		if err == nil {
+			t.Fatal("expected login to fail when the config write fails")
+		}
+	})
+	if len(store.deleted) != 0 {
+		t.Fatalf("rollback must restore, not delete, a pre-existing secret; deleted=%v", store.deleted)
+	}
+	if got, err := store.Get("dev@example.com"); err != nil || got != "old-secret" {
+		t.Fatalf("previous credential must be restored after a failed re-login: got %q err=%v", got, err)
+	}
+}
+
 func TestMigrationBlocksOnUnavailableStoreKeepingPlaintext(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "cfg.yaml")
@@ -742,5 +770,30 @@ func TestMigrationRollsBackSecretWhenConfigWriteFails(t *testing.T) {
 	b, _ := os.ReadFile(cfgPath)
 	if !strings.Contains(string(b), "api_token: plaintext-abc") {
 		t.Fatalf("plaintext token must remain when migration fails: %s", b)
+	}
+}
+
+func TestMigrationRollbackRestoresPreviousSecret(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "cfg.yaml")
+	if err := os.WriteFile(cfgPath, []byte("email: dev@example.com\napi_token: plaintext-abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	chmodReadOnly(t, cfgPath)
+
+	// Migration reuses the email store key; an existing credential must be
+	// restored, never deleted, when the config write fails.
+	store := &deleteRecorder{MemoryStore: auth.NewMemoryStore()}
+	if err := store.MemoryStore.Set("dev@example.com", "old-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.MigrateLegacyToken(cfgPath, store); err == nil {
+		t.Fatal("expected migration to fail when the config write fails")
+	}
+	if len(store.deleted) != 0 {
+		t.Fatalf("rollback must restore, not delete, a pre-existing secret; deleted=%v", store.deleted)
+	}
+	if got, err := store.Get("dev@example.com"); err != nil || got != "old-secret" {
+		t.Fatalf("previous secret must be restored after failed migration: got %q err=%v", got, err)
 	}
 }

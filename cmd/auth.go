@@ -156,12 +156,19 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
+			// Snapshot any secret already stored under the same key (re-login to
+			// the same account/profile) so a failed profile write below can
+			// restore it instead of deleting a previously valid credential.
+			prevSecret, prevExisted, err := auth.SnapshotSecret(store, storeKey)
+			if err != nil {
+				return fail(fmt.Errorf("inspect previous credential: %w", err))
+			}
 			if err := store.Set(storeKey, token); err != nil {
 				return fail(err)
 			}
 			if err := config.WriteFileConfig(path, next); err != nil {
-				if rbErr := store.Delete(storeKey); rbErr != nil {
-					return fail(fmt.Errorf("%v (failed to roll back the just-saved secret: %v)", err, rbErr))
+				if rbErr := auth.RestoreSecret(store, storeKey, prevSecret, prevExisted); rbErr != nil {
+					return fail(fmt.Errorf("%v (failed to restore the previous credential: %v)", err, rbErr))
 				}
 				return fail(err)
 			}

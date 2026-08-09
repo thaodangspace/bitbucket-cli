@@ -85,6 +85,10 @@ if [ -n "$TOOL_FAIL_MARKER" ] && [ -f "$TOOL_FAIL_MARKER" ]; then
   echo "no session bus" >&2
   exit 1
 fi
+if [ -n "$TOOL_LOCKED_MARKER" ] && [ -f "$TOOL_LOCKED_MARKER" ]; then
+  echo "item is locked in its collection" >&2
+  exit 1
+fi
 dir="$TOOL_STATE_DIR"
 mkdir -p "$dir"
 key="$svc:$acct"
@@ -267,5 +271,71 @@ func TestLinuxSecretStoreRoundTripAndNotFound(t *testing.T) {
 	}
 	if _, err := l.Get("dev@example.com"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("after delete: got %v, want ErrNotFound", err)
+	}
+}
+
+func TestLinuxSecretStoreDeleteDistinguishesLockedItem(t *testing.T) {
+	dir := t.TempDir()
+	bin := writeSecretToolScript(t, dir)
+	envForTool(t, filepath.Join(dir, "state"))
+	l := &LinuxSecretStore{service: Service, lookPath: func(string) (string, error) { return bin, nil }}
+
+	// A locked / non-removable item is an item-level failure, never a
+	// "store unavailable" condition.
+	locked := filepath.Join(dir, "locked")
+	if err := os.WriteFile(locked, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TOOL_LOCKED_MARKER", locked)
+	if err := l.Delete("dev@example.com"); err == nil {
+		t.Fatal("expected a failure for a locked/unremovable item")
+	} else if errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("locked item must not be reported as store unavailable: %v", err)
+	}
+
+	// An unreachable daemon is still classified as store unavailable.
+	os.Remove(locked)
+	t.Setenv("TOOL_LOCKED_MARKER", "")
+	fail := filepath.Join(dir, "fail")
+	if err := os.WriteFile(fail, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TOOL_FAIL_MARKER", fail)
+	if err := l.Delete("dev@example.com"); !errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("want ErrStoreUnavailable for an unreachable daemon, got %v", err)
+	}
+}
+
+func TestSnapshotAndRestoreSecret(t *testing.T) {
+	m := NewMemoryStore()
+	if _, ok, err := SnapshotSecret(m, "missing@example.com"); err != nil || ok {
+		t.Fatalf("missing key snapshot: ok=%v err=%v", ok, err)
+	}
+	if err := m.Set("dev@example.com", "old-secret"); err != nil {
+		t.Fatal(err)
+	}
+	prev, ok, err := SnapshotSecret(m, "dev@example.com")
+	if err != nil || !ok || prev != "old-secret" {
+		t.Fatalf("snapshot: prev=%q ok=%v err=%v", prev, ok, err)
+	}
+	// Restore puts the previous value back after an overwrite.
+	if err := m.Set("dev@example.com", "new-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreSecret(m, "dev@example.com", prev, ok); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := m.Get("dev@example.com"); err != nil || got != "old-secret" {
+		t.Fatalf("restore: got %q err=%v", got, err)
+	}
+	// A key that did not exist before is deleted on rollback.
+	if err := m.Set("new@example.com", "fresh"); err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreSecret(m, "new@example.com", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Get("new@example.com"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("rollback of a new key must delete it, got %v", err)
 	}
 }

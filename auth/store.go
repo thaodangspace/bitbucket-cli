@@ -140,7 +140,7 @@ func (l *LinuxSecretStore) Get(account string) (string, error) {
 		if len(out) == 0 && strings.TrimSpace(stderr.String()) == "" {
 			return "", ErrNotFound
 		}
-		return "", secretServiceError("lookup in Secret Service", stderr, err)
+		return "", secretActionError("lookup in Secret Service", stderr, err)
 	}
 	if len(out) == 0 {
 		return "", ErrNotFound
@@ -159,7 +159,7 @@ func (l *LinuxSecretStore) Set(account, secret string) error {
 	cmd.Stdin = strings.NewReader(secret)
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return secretServiceError("save to Secret Service", stderr, err)
+		return secretActionError("save to Secret Service", stderr, err)
 	}
 	return nil
 }
@@ -173,7 +173,11 @@ func (l *LinuxSecretStore) Delete(account string) error {
 	cmd := exec.Command(path, "clear", "service", l.service, "account", account)
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return secretServiceError("clear Credential from Secret Service", stderr, err)
+		// `secret-tool clear` only removes unlocked matching items; a locked
+		// collection or an item that could not be removed must not be reported
+		// as "daemon unavailable". Only genuine daemon/bus failures map to
+		// ErrStoreUnavailable.
+		return secretActionError("clear the entry from Secret Service", stderr, err)
 	}
 	return nil
 }
@@ -261,6 +265,30 @@ func CurrentStore() SecretStore {
 // SetGlobalStore injects a SecretStore for tests (nil restores the default).
 func SetGlobalStore(s SecretStore) { globalStore = s }
 
+// SnapshotSecret returns the secret currently stored under account, plus
+// whether one existed. All errors other than ErrNotFound are surfaced so a
+// caller never overwrites a value it was unable to inspect.
+func SnapshotSecret(store SecretStore, account string) (string, bool, error) {
+	prev, err := store.Get(account)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return prev, true, nil
+}
+
+// RestoreSecret reverts a store.Set(account, _) that must be rolled back: the
+// previous value is written back when one existed, otherwise the newly written
+// entry is deleted. This is a rollback-only helper.
+func RestoreSecret(store SecretStore, account, prev string, existed bool) error {
+	if existed {
+		return store.Set(account, prev)
+	}
+	return store.Delete(account)
+}
+
 const (
 	macOSSecurityTool = "security"
 	linuxSecretTool   = "secret-tool"
@@ -276,12 +304,40 @@ func requireTool(lookPath func(string) (string, error), name, display string) (s
 	return path, nil
 }
 
-// secretServiceError builds a targeted error for a Linux secret-tool failure,
-// wrapping ErrStoreUnavailable so login/migration can guide the user.
-func secretServiceError(action string, stderr bytes.Buffer, err error) error {
+// secretActionError wraps a failing secret-tool operation. Only failures that
+// indicate the Secret Service daemon itself is unreachable are mapped to
+// ErrStoreUnavailable; an item-level failure (such as a locked collection that
+// cannot be cleared) is reported as an ordinary error so it is never confused
+// with "the store is down".
+func secretActionError(action string, stderr bytes.Buffer, err error) error {
 	msg := strings.TrimSpace(stderr.String())
 	if msg == "" {
 		msg = err.Error()
 	}
-	return fmt.Errorf("%w: Secret Service %s (%s). Start a desktop keyring (GNOME Keyring / KWallet), or use the BITBUCKET_API_TOKEN / BITBUCKET_EMAIL environment variables instead.", ErrStoreUnavailable, action, msg)
+	if secretDaemonReachable(msg) {
+		return fmt.Errorf("%w: Linux Secret Service daemon is not reachable: %s. Start a desktop keyring (GNOME Keyring / KWallet), or use the BITBUCKET_API_TOKEN / BITBUCKET_EMAIL environment variables instead.", ErrStoreUnavailable, msg)
+	}
+	return fmt.Errorf("Secret Service %s failed (%s); the item may be locked or the operation unsupported", action, msg)
+}
+
+// secretDaemonReachable reports whether a secret-tool diagnostic points at the
+// Secret Service / session bus rather than at an individual item.
+func secretDaemonReachable(msg string) bool {
+	lower := strings.ToLower(msg)
+	for _, probe := range []string{
+		"no session bus",
+		"session bus",
+		"not provided by any .service",
+		"cannot autolaunch",
+		"failed to connect",
+		"could not connect",
+		"connection is closed",
+		"no dbus",
+		"org.freedesktop.secrets",
+	} {
+		if strings.Contains(lower, probe) {
+			return true
+		}
+	}
+	return false
 }

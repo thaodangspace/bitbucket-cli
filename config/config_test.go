@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -420,5 +421,41 @@ func TestResolveRepoRefErrorsWhenUnresolved(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Provide workspace and repo") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// unavailableStore models a real keychain backend whose daemon is unreachable:
+// Get fails with ErrStoreUnavailable without carrying a token.
+type unavailableStore struct{}
+
+func (unavailableStore) Get(account string) (string, error) { return "", auth.ErrStoreUnavailable }
+func (unavailableStore) Set(account, secret string) error   { return nil }
+func (unavailableStore) Delete(account string) error        { return nil }
+
+func TestLoadConfigSurfacesStoreUnavailable(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := SetFileValue(cfgPath, "email", "dev@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(map[string]string{}, "", cfgPath, WithSecretStore(unavailableStore{}))
+	if err == nil {
+		t.Fatalf("expected LoadConfig to fail, got %+v", cfg)
+	}
+	if !errors.Is(err, auth.ErrStoreUnavailable) {
+		t.Fatalf("want ErrStoreUnavailable, got %v", err)
+	}
+}
+
+func TestLoadConfigEnvPrecedenceIgnoresStoreUnavailable(t *testing.T) {
+	env := map[string]string{
+		"BITBUCKET_EMAIL":     "dev@example.com",
+		"BITBUCKET_API_TOKEN": "env-token",
+	}
+	cfg, err := LoadConfig(env, "", t.TempDir()+"/cfg.yaml", WithSecretStore(unavailableStore{}))
+	if err != nil {
+		t.Fatalf("env credentials must still work when the store is unavailable: %v", err)
+	}
+	if cfg.APIToken != "env-token" || cfg.CredentialSource != SourceEnv {
+		t.Fatalf("expected env source, got %+v", cfg)
 	}
 }
