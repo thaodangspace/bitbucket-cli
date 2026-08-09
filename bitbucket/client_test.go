@@ -311,7 +311,65 @@ func TestForbiddenIncludesRequiredScope(t *testing.T) {
 	if !strings.Contains(err.Error(), "write:repository:bitbucket") {
 		t.Fatalf("403 message should name the required scope: %v", err)
 	}
+	var he *HTTPError
+	if !errors.As(err, &he) || he.CredentialKind != string(auth.TokenAPI) {
+		t.Fatalf("403 error lost credential kind: %#v", he)
+	}
 }
+
+func TestForbiddenScopeHintUsesActiveCredential(t *testing.T) {
+	tests := []struct {
+		kind auth.TokenType
+		want string
+		bad  string
+	}{
+		{auth.TokenAPI, "read:pipeline:bitbucket", "pipeline:read"},
+		{auth.TokenAccess, "pipeline:read", "read:pipeline:bitbucket"},
+		{auth.TokenOAuth, "pipeline:read", "read:pipeline:bitbucket"},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			c := NewClient(auth.ProviderFor(tc.kind, "dev@example.com", "token"), WithHTTPClient(&http.Client{
+				Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					return jsonResponse(403, `{"error":{"message":"denied"}}`), nil
+				}),
+			}))
+			err := c.Request(context.Background(), "/repositories/team/repo/pipelines", RequestOptions{}, nil)
+			var he *HTTPError
+			if !errors.As(err, &he) {
+				t.Fatalf("expected HTTPError, got %T", err)
+			}
+			if !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), tc.bad) {
+				t.Fatalf("message %q does not contain %q without %q", err, tc.want, tc.bad)
+			}
+			if len(he.RequiredScopes) != 1 || he.RequiredScopes[0] != tc.want {
+				t.Fatalf("required scopes = %#v, want [%q]", he.RequiredScopes, tc.want)
+			}
+		})
+	}
+}
+
+func TestForbiddenUnknownCredentialHasNoScopeGuess(t *testing.T) {
+	provider := &unknownProvider{}
+	c := NewClient(provider, WithHTTPClient(&http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(403, `{"error":{"message":"denied"}}`), nil
+		}),
+	}))
+	err := c.Request(context.Background(), "/repositories/team/repo/pipelines", RequestOptions{}, nil)
+	var he *HTTPError
+	if !errors.As(err, &he) {
+		t.Fatalf("expected HTTPError, got %T", err)
+	}
+	if he.CredentialKind != "" || len(he.RequiredScopes) != 0 || strings.Contains(err.Error(), "pipeline:") {
+		t.Fatalf("unknown credential received guessed guidance: %#v: %v", he, err)
+	}
+}
+
+type unknownProvider struct{}
+
+func (*unknownProvider) Apply(*http.Request) error { return nil }
+func (*unknownProvider) Kind() string              { return "" }
 
 func TestDoStreamsBodyAndHeaders(t *testing.T) {
 	c := testClient(func(r *http.Request) (*http.Response, error) {

@@ -107,11 +107,14 @@ bitbucket-cli config path          # print the resolved file path
 API tokens must be Atlassian API tokens with access to the target workspace.
 Bitbucket access tokens are resource-scoped and use Bearer authentication; they
 must be validated against a repository context with repository-read access.
-OAuth tokens also use Bearer. Recommended scopes: `read:repository:bitbucket`, `read:pullrequest:bitbucket`,
-and `write:pullrequest:bitbucket` to create/update PRs and post comments. Add
-`write:repository:bitbucket` when using `pr attach`, which uploads files to
-repository Downloads before commenting links on the PR. On a `403` the CLI names
-the required scope for the endpoint.
+OAuth tokens also use Bearer. Permission names depend on the credential type:
+API tokens use names such as `read:repository:bitbucket` and
+`write:pullrequest:bitbucket`; access tokens use names such as
+`repository:read` and `pullrequest:write`; OAuth uses names such as
+`repository` and `pullrequest:write`. On a `403`, the CLI selects the matching
+credential-specific permission family. The result is documented remediation
+guidance, not live scope introspection, and resource/event configuration may
+require additional permissions.
 
 If `BITBUCKET_DEFAULT_WORKSPACE`/`BITBUCKET_DEFAULT_REPO` are unset and you run
 inside a git repository whose `origin` points at `bitbucket.org`, the workspace

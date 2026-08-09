@@ -72,18 +72,30 @@ sends credentials to `https://api.bitbucket.org/2.0`. Tokens never appear in
 process arguments, logs, error excerpts, URLs, or pretty output; errors redact
 the active token before they are rendered.
 
-### Minimum scopes by command family
+### Credential-specific permission hints
 
-Bitbucket API tokens grant repository-level scopes. A conservative mapping:
+Permission names depend on the active credential model and must not be mixed:
+
+- **Atlassian API tokens:** `read:repository:bitbucket`,
+  `read:pullrequest:bitbucket`, `write:pullrequest:bitbucket`, and
+  `read:pipeline:bitbucket`/`write:pipeline:bitbucket`.
+- **Bitbucket access tokens:** resource permissions such as `repository:read`,
+  `repository:write`, `pullrequest:read`/`pullrequest:write`, and
+  `pipeline:read`/`pipeline:write`.
+- **OAuth bearer tokens:** OAuth scopes such as `repository`,
+  `repository:write`, `pullrequest`/`pullrequest:write`, and
+  `pipeline:read`/`pipeline:write`.
+
+The endpoint-family examples below use API-token names unless noted otherwise.
 
 - Read inspection (`pr list/get/comments/commits`, `branch list`,
-  `repo get`, `pipeline list/get`): `repository:read`, `pullrequest:read`
+  `repo get`, `pipeline list/get`): `read:repository:bitbucket`, `read:pullrequest:bitbucket`
 - PR comments and writes (`pr comment`, `pr create`, `pr update`):
   `write:pullrequest:bitbucket`
 - Downloads uploads (`pr attach`): `write:repository:bitbucket`
-- Pipelines reads (`pipeline list/get/steps/log/test-report/watch`): `pipeline:read`
+- Pipelines reads (`pipeline list/get/steps/log/test-report/watch`): `read:pipeline:bitbucket`
 - Pipeline execution and administration (`pipeline run/stop`, schedules, caches,
-  and configuration): `pipeline:write`
+  and configuration): `write:pipeline:bitbucket`
 - Pipeline variables: the pipeline variable read/write scopes for the selected
   repository, workspace, or deployment environment
 - Self-hosted runners: the pipeline runner read/write scopes for the selected
@@ -99,8 +111,11 @@ Bitbucket API tokens grant repository-level scopes. A conservative mapping:
   `write:ssh-key:bitbucket` or `delete:ssh-key:bitbucket` for mutations (deploy
   keys are read-only for Git access)
 
-On a `403`, the CLI includes the endpoint's documented required scopes in the
-error so the token can be re-created with the right grants.
+On a `403`, the CLI selects the matching permission family and includes a
+conservative endpoint hint. This is remediation guidance, not live scope
+introspection; resource or subscribed-event configuration may require
+additional permissions. Unknown or custom providers receive generic
+authorization guidance without a guessed credential-specific scope.
 
 ## CI and automation
 
