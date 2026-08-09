@@ -15,6 +15,7 @@ import (
 func GenerateCommandMarkdown() string {
 	var b strings.Builder
 	b.WriteString("---\ntitle: Generated command reference\ndescription: Generated from the Cobra command tree.\n---\n\n")
+	b.WriteString("> Required scopes below are the API-token reference family. Runtime 403 hints are selected for the active API token, Bitbucket access token, or OAuth credential; they are documented remediation guidance rather than live scope introspection.\n\n")
 	var walk func(*cobra.Command, string)
 	walk = func(cmd *cobra.Command, prefix string) {
 		children := append([]*cobra.Command(nil), cmd.Commands()...)
@@ -30,7 +31,7 @@ func GenerateCommandMarkdown() string {
 			fullName := strings.TrimSpace(prefix + use)
 			b.WriteString(fmt.Sprintf("## `%s`\n\n%s\n\n", fullName, strings.TrimSpace(child.Short)))
 			classification, scope := commandMetadata(fullName)
-			b.WriteString(fmt.Sprintf("- Classification: **%s**\n- Required scopes: `%s`\n- Example: `%s`\n", classification, scope, "bitbucket-cli "+fullName))
+			b.WriteString(fmt.Sprintf("- Classification: **%s**\n- Required scopes (API-token reference): `%s`\n- Example: `%s`\n", classification, scope, "bitbucket-cli "+fullName))
 			if strings.HasPrefix(fullName, "report upsert") || strings.HasPrefix(fullName, "annotation upsert") {
 				b.WriteString("\n> Warning: report payloads and annotations are visible to repository users with access; never include secrets.\n")
 			}

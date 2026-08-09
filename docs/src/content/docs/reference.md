@@ -3,12 +3,14 @@ title: Generated command reference
 description: Generated from the Cobra command tree.
 ---
 
+> Required scopes below are the API-token reference family. Runtime 403 hints are selected for the active API token, Bitbucket access token, or OAuth credential; they are documented remediation guidance rather than live scope introspection.
+
 ## `alias`
 
 Manage command aliases
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli alias`
 
 ## `alias delete <name>`
@@ -16,7 +18,7 @@ Manage command aliases
 Delete a command alias
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli alias delete <name>`
 
 ## `alias list`
@@ -24,7 +26,7 @@ Delete a command alias
 List command aliases
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli alias list`
 
 ## `alias set <name> <command>`
@@ -32,7 +34,7 @@ List command aliases
 Set a command alias
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli alias set <name> <command>`
 
 ## `annotation`
@@ -40,7 +42,7 @@ Set a command alias
 Manage Code Insights annotations
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli annotation`
 - JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
 
@@ -49,7 +51,7 @@ Manage Code Insights annotations
 Delete a report annotation
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli annotation delete <commit> <report-id> <annotation-id>`
 - JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
 
@@ -60,7 +62,7 @@ Flags: `--yes` — Confirm deletion
 List report annotations
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli annotation list <commit> <report-id>`
 - JSON fields: `external_id,path,file_path,line,start_line,end_line,summary,message,severity,result,link`
 
@@ -71,7 +73,7 @@ Flags: `--limit` — Maximum annotations to return
 Create or update report annotations
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli annotation upsert <commit> <report-id>`
 
 > Warning: report payloads and annotations are visible to repository users with access; never include secrets.
@@ -84,7 +86,7 @@ Flags: `--file` — JSON annotation object or array
 Make an arbitrary Bitbucket Cloud REST 2.0 request
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli api <endpoint>`
 
 Flags: `--cache` — Cache GET responses for this duration (e.g. 30s, 2m); `--field` — Typed field in key=value form; true/false/null and integers are typed, supports target[x]=y nesting and a[]=v arrays (repeatable); `--header` — Request header in key:value form (repeatable); `--include` — Include response status and headers before the body; `--input` — Raw request body from a file, or - for stdin; `--jq` — Apply a jq expression to JSON output (supports .foo, .foo.bar, [<index>], []); `--max-pages` — Maximum pages to follow with --paginate (0 means unlimited); `--method` — HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS); defaults to GET; `--output` — Write the raw response body to a file instead of stdout; `--paginate` — Follow Bitbucket 'next' pagination links for GET requests; `--raw-field` — String field in key=value form (repeatable); `--silent` — Suppress the response body; `--slurp` — With --paginate, apply --jq/--template to the accumulated array instead of each item; `--template` — Format JSON output with a Go template (adds 'json' and 'pretty' helpers)
@@ -94,7 +96,7 @@ Flags: `--cache` — Cache GET responses for this duration (e.g. 30s, 2m); `--fi
 Manage bitbucket-cli authentication
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli auth`
 
 ## `auth login`
@@ -102,7 +104,7 @@ Manage bitbucket-cli authentication
 Authenticate with Bitbucket and save credentials securely
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli auth login`
 
 Flags: `--email` — Atlassian account email; `--token-type` — Token type: api, access, or oauth; `--with-token` — Read the token from stdin instead of prompting
@@ -112,7 +114,7 @@ Flags: `--email` — Atlassian account email; `--token-type` — Token type: api
 Remove stored credentials from the config file and credential store
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli auth logout`
 
 Flags: `--yes` — Skip confirmation (required when stdin is not a TTY)
@@ -122,7 +124,7 @@ Flags: `--yes` — Skip confirmation (required when stdin is not a TTY)
 Report authentication status and credential source
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli auth status`
 
 Flags: `--json` — Force JSON output (default)
@@ -132,7 +134,7 @@ Flags: `--json` — Force JSON output (default)
 Print the active token (opt-in, for scripting)
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli auth token`
 
 ## `branch`
@@ -140,7 +142,7 @@ Print the active token (opt-in, for scripting)
 Branch commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch`
 
 ## `branch create <name> --target <commit|branch|tag>`
@@ -148,7 +150,7 @@ Branch commands
 Create a branch
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch create <name> --target <commit|branch|tag>`
 
 Flags: `--target` — Commit hash, branch, or tag to point at
@@ -158,7 +160,7 @@ Flags: `--target` — Commit hash, branch, or tag to point at
 Delete a branch
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch delete <name> --yes`
 
 Flags: `--yes` — Confirm deletion
@@ -168,7 +170,7 @@ Flags: `--yes` — Confirm deletion
 List branches in a repository
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch list`
 - JSON fields: `name,target,links,requested_target,resolved_target`
 
@@ -179,7 +181,7 @@ Flags: `--limit` — Maximum branches to return; `--query` — Bitbucket q expre
 View a branch
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch view <name>`
 - JSON fields: `name,target,links,requested_target,resolved_target`
 
@@ -188,7 +190,7 @@ View a branch
 Branch restriction commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch-restriction`
 - JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
 
@@ -197,7 +199,7 @@ Branch restriction commands
 Create a branch restriction
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli branch-restriction create --kind <kind> (--pattern <glob>|--branch-type <type>)`
 - JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
 
@@ -208,7 +210,7 @@ Flags: `--approvals` — Required approvals; `--branch-type` — Branching-model
 Delete a branch restriction
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli branch-restriction delete <id> --yes`
 - JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
 
@@ -219,7 +221,7 @@ Flags: `--yes` — Confirm deletion
 Edit a branch restriction
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli branch-restriction edit <id> [flags]`
 - JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
 
@@ -230,7 +232,7 @@ Flags: `--approvals` — Required approvals; `--branch-type` — Branching-model
 List branch restrictions
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch-restriction list`
 - JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
 
@@ -241,7 +243,7 @@ Flags: `--branch-type` — Branching-model branch type; `--export` — Export re
 View a branch restriction
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branch-restriction view <id>`
 - JSON fields: `id,kind,branch_match_kind,pattern,branch_type,value,users,groups`
 
@@ -250,7 +252,7 @@ View a branch restriction
 Branching model commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branching-model`
 - JSON fields: `development,production,branch_types,default_branch_deletion`
 
@@ -259,7 +261,7 @@ Branching model commands
 Edit the repository branching model
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli branching-model edit`
 - JSON fields: `development,production,branch_types,default_branch_deletion`
 
@@ -270,7 +272,7 @@ Flags: `--bugfix-prefix` — Bugfix branch prefix; `--development-branch` — De
 View the repository branching model
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli branching-model view`
 - JSON fields: `development,production,branch_types,default_branch_deletion`
 
@@ -279,7 +281,7 @@ View the repository branching model
 Open the repository in a browser
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli browse [path]`
 
 Flags: `--branch` — Branch to view; `--no-browser` — Print the URL without opening a browser
@@ -289,7 +291,7 @@ Flags: `--branch` — Branch to view; `--no-browser` — Print the URL without o
 Browse commits and commit checks
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit`
 
 ## `commit approve <commit>`
@@ -297,7 +299,7 @@ Browse commits and commit checks
 Approve a commit
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit approve <commit>`
 
 ## `commit comment`
@@ -305,7 +307,7 @@ Approve a commit
 Manage commit comments
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit comment`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -314,7 +316,7 @@ Manage commit comments
 Create a commit comment
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit comment create <commit>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -325,7 +327,7 @@ Flags: `--body-file` — Read the body from a file (- for stdin); `--body` — M
 Delete a commit comment
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit comment delete <commit> <comment-id>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -336,7 +338,7 @@ Flags: `--yes` — Confirm deletion
 Edit a commit comment
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit comment edit <commit> <comment-id>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -347,7 +349,7 @@ Flags: `--body-file` — Read the replacement body from a file (- for stdin); `-
 List comments on a commit
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit comment list <commit>`
 - JSON fields: `id,content,user,inline,created_on,updated_on`
 
@@ -358,7 +360,7 @@ Flags: `--limit` — Maximum comments to return
 Show a commit or range diff
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit diff <commit-or-range>`
 
 Range semantics: `A..B` follows Bitbucket's API semantics—commits reachable from B excluding commits reachable from A.
@@ -370,7 +372,7 @@ Flags: `--context` — Number of context lines; `--name-only` — Show changed f
 List repository commits
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit list [<ref>]`
 - JSON fields: `hash,message,author,date,links,requested_selector,resolved_hash`
 
@@ -381,7 +383,7 @@ Flags: `--exclude` — Exclude commits reachable from this ref (repeatable); `--
 Manage commit build statuses
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit status`
 - JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
 
@@ -390,7 +392,7 @@ Manage commit build statuses
 List build statuses for a commit
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit status list <commit>`
 - JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
 
@@ -401,7 +403,7 @@ Flags: `--limit` — Maximum statuses to return
 Create or update a commit build status
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit status set <commit>`
 - JSON fields: `key,state,name,description,url,refname,created_on,updated_on`
 
@@ -412,7 +414,7 @@ Flags: `--description` — Status description; `--key` — Unique status key; `-
 Remove your approval from a commit
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli commit unapprove <commit>`
 
 ## `commit view <commit>`
@@ -420,7 +422,7 @@ Remove your approval from a commit
 View a repository commit
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli commit view <commit>`
 - JSON fields: `hash,message,author,date,links,requested_selector,resolved_hash`
 
@@ -431,7 +433,7 @@ Flags: `--comments` — Include commit comments; `--reports` — Include Code In
 Generate shell completion script
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli completion bash|zsh|fish|powershell`
 
 ## `config`
@@ -439,7 +441,7 @@ Generate shell completion script
 Read and write the bitbucket-cli config file
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli config`
 
 ## `config get <key>`
@@ -447,7 +449,7 @@ Read and write the bitbucket-cli config file
 Print a stored config value
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli config get <key>`
 
 ## `config list`
@@ -455,7 +457,7 @@ Print a stored config value
 Show stored config values (API token redacted)
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli config list`
 
 ## `config path`
@@ -463,7 +465,7 @@ Show stored config values (API token redacted)
 Print the config file path
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli config path`
 
 ## `config set <key> <value>`
@@ -471,7 +473,7 @@ Print the config file path
 Set a config value, writing it to the config file
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli config set <key> <value>`
 
 ## `default-reviewer`
@@ -479,7 +481,7 @@ Set a config value, writing it to the config file
 Default reviewer commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli default-reviewer`
 - JSON fields: `uuid,account_id,display_name,nickname,links`
 
@@ -488,7 +490,7 @@ Default reviewer commands
 Add a default reviewer
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli default-reviewer add <user-selector>`
 - JSON fields: `uuid,account_id,display_name,nickname,links`
 
@@ -497,7 +499,7 @@ Add a default reviewer
 List default reviewers
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli default-reviewer list`
 - JSON fields: `uuid,account_id,display_name,nickname,links`
 
@@ -506,7 +508,7 @@ List default reviewers
 Remove a default reviewer
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli default-reviewer remove <user-selector> --yes`
 - JSON fields: `uuid,account_id,display_name,nickname,links`
 
@@ -517,7 +519,7 @@ Flags: `--yes` — Confirm removal
 Manage repository deploy keys (read-only Git access)
 
 - Classification: **read**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli deploy-key`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -526,7 +528,7 @@ Manage repository deploy keys (read-only Git access)
 Add a repository deploy key
 
 - Classification: **write**
-- Required scopes: `write:ssh-key:bitbucket and admin:repository:bitbucket`
+- Required scopes (API-token reference): `write:ssh-key:bitbucket and admin:repository:bitbucket`
 - Example: `bitbucket-cli deploy-key add --file <public-key>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -537,7 +539,7 @@ Flags: `--file` — OpenSSH public-key file, or - for stdin (required); `--label
 Delete a repository deploy key
 
 - Classification: **delete**
-- Required scopes: `admin:repository:bitbucket and delete:ssh-key:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket and delete:ssh-key:bitbucket`
 - Example: `bitbucket-cli deploy-key delete <id> --yes`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -548,7 +550,7 @@ Flags: `--repository` — Repository selector (required); `--yes` — Confirm de
 List repository deploy keys
 
 - Classification: **read**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli deploy-key list`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -559,7 +561,7 @@ Flags: `--limit` — Maximum deploy keys to return; `--repository` — Repositor
 Repository permission commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli permission`
 - JSON fields: `permission,user,group,repository,before,after,changed`
 
@@ -568,7 +570,7 @@ Repository permission commands
 Grant an explicit repository permission
 
 - Classification: **write**
-- Required scopes: `admin:repository:bitbucket, write:permission:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket, write:permission:bitbucket`
 - Example: `bitbucket-cli permission grant --repository <workspace/repo> (--user <selector>|--group <slug>)`
 - JSON fields: `permission,user,group,repository,before,after,changed`
 
@@ -579,7 +581,7 @@ Flags: `--group` — Group slug; `--permission` — Permission level: read, writ
 List explicit repository group permissions
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli permission groups`
 - JSON fields: `permission,user,group,repository,before,after,changed`
 
@@ -590,7 +592,7 @@ Flags: `--limit` — Maximum permissions to return
 List repositories accessible to a user
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli permission repos --user <user-selector>`
 - JSON fields: `permission,user,group,repository,before,after,changed`
 
@@ -601,7 +603,7 @@ Flags: `--limit` — Maximum permissions to return; `--query` — Additional Bit
 Revoke an explicit repository permission
 
 - Classification: **write**
-- Required scopes: `admin:repository:bitbucket, delete:permission:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket, delete:permission:bitbucket`
 - Example: `bitbucket-cli permission revoke --repository <workspace/repo> (--user <selector>|--group <slug>)`
 - JSON fields: `permission,user,group,repository,before,after,changed`
 
@@ -612,7 +614,7 @@ Flags: `--group` — Group slug; `--user` — User selector; `--yes` — Confirm
 List explicit repository user permissions
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli permission users`
 - JSON fields: `permission,user,group,repository,before,after,changed`
 
@@ -623,7 +625,7 @@ Flags: `--limit` — Maximum permissions to return
 Pipeline commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli pipeline`
 
 ## `pipeline cache`
@@ -631,7 +633,7 @@ Pipeline commands
 Manage pipeline caches
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline cache`
 
 ## `pipeline cache delete <uuid|all>`
@@ -639,7 +641,7 @@ Manage pipeline caches
 Delete a pipeline cache
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline cache delete <uuid|all>`
 
 Flags: `--all` — Confirm all-cache deletion; `--yes` — Confirm deletion
@@ -649,7 +651,7 @@ Flags: `--all` — Confirm all-cache deletion; `--yes` — Confirm deletion
 List pipeline caches
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline cache list`
 
 Flags: `--limit` — Maximum caches
@@ -659,7 +661,7 @@ Flags: `--limit` — Maximum caches
 Manage pipeline configuration
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline config`
 
 ## `pipeline config disable`
@@ -667,7 +669,7 @@ Manage pipeline configuration
 Disable Pipelines
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline config disable`
 
 Flags: `--yes` — Confirm disabling Pipelines
@@ -677,7 +679,7 @@ Flags: `--yes` — Confirm disabling Pipelines
 Enable Pipelines
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline config enable`
 
 ## `pipeline config view`
@@ -685,7 +687,7 @@ Enable Pipelines
 View pipeline configuration
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline config view`
 
 ## `pipeline get <uuid>`
@@ -693,7 +695,7 @@ View pipeline configuration
 Get a single pipeline run by UUID with its steps
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline get <uuid>`
 - JSON fields: `uuid,build_number,state,target,trigger,steps`
 
@@ -704,7 +706,7 @@ Flags: `--web` — Open the pipeline in a browser
 List pipeline runs for a repository
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline list`
 - JSON fields: `uuid,build_number,state,target,trigger,steps`
 
@@ -715,7 +717,7 @@ Flags: `--limit` — Maximum pipelines to return; `--state` — Filter by state:
 Read a pipeline step log
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline log <pipeline> [step]`
 
 Flags: `--follow` — Poll for new log content; `--interval` — Polling interval; `--output` — Write atomically to this file
@@ -725,7 +727,7 @@ Flags: `--follow` — Poll for new log content; `--interval` — Polling interva
 Start a pipeline
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline run`
 
 Flags: `--branch` — Run against a branch; `--commit` — Run against a commit hash; `--custom` — Custom pipeline selector; `--secured-variable` — Secured variable key; read its value from stdin (repeatable); `--tag` — Run against a tag; `--variable` — Pipeline variable KEY=VALUE (repeatable); `--wait` — Wait for the pipeline to finish
@@ -735,7 +737,7 @@ Flags: `--branch` — Run against a branch; `--commit` — Run against a commit 
 Manage pipeline runners
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline runner`
 
 ## `pipeline runner create`
@@ -743,7 +745,7 @@ Manage pipeline runners
 Create a pipeline runner
 
 - Classification: **write**
-- Required scopes: `read:runner:bitbucket and write:runner:bitbucket`
+- Required scopes (API-token reference): `read:runner:bitbucket and write:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner create`
 
 Flags: `--labels` — Runner labels; `--name` — Runner name; `--workspace` — Create workspace runner
@@ -753,7 +755,7 @@ Flags: `--labels` — Runner labels; `--name` — Runner name; `--workspace` —
 Delete a pipeline runner
 
 - Classification: **write**
-- Required scopes: `write:runner:bitbucket`
+- Required scopes (API-token reference): `write:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner delete <uuid>`
 
 Flags: `--workspace` — Delete workspace runner; `--yes` — Confirm deletion
@@ -763,7 +765,7 @@ Flags: `--workspace` — Delete workspace runner; `--yes` — Confirm deletion
 Edit a pipeline runner
 
 - Classification: **write**
-- Required scopes: `read:runner:bitbucket and write:runner:bitbucket`
+- Required scopes (API-token reference): `read:runner:bitbucket and write:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner edit <uuid>`
 
 Flags: `--enabled` — Enable or disable runner; `--labels` — Runner labels; `--name` — Runner name; `--workspace` — Edit workspace runner
@@ -773,7 +775,7 @@ Flags: `--enabled` — Enable or disable runner; `--labels` — Runner labels; `
 List pipeline runners
 
 - Classification: **read**
-- Required scopes: `read:runner:bitbucket`
+- Required scopes (API-token reference): `read:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner list`
 
 Flags: `--limit` — Maximum runners; `--workspace` — Use workspace runners
@@ -783,7 +785,7 @@ Flags: `--limit` — Maximum runners; `--workspace` — Use workspace runners
 View a pipeline runner
 
 - Classification: **read**
-- Required scopes: `read:runner:bitbucket`
+- Required scopes (API-token reference): `read:runner:bitbucket`
 - Example: `bitbucket-cli pipeline runner view <uuid>`
 
 Flags: `--workspace` — Use workspace runner
@@ -793,7 +795,7 @@ Flags: `--workspace` — Use workspace runner
 Manage pipeline schedules
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline schedule`
 
 ## `pipeline schedule create`
@@ -801,7 +803,7 @@ Manage pipeline schedules
 Create a pipeline schedule
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline schedule create`
 
 Flags: `--branch` — Schedule branch; `--commit` — Schedule commit hash; `--cron` — Five-field cron expression; `--custom` — Custom pipeline selector; `--enabled` — Enable the schedule; `--tag` — Schedule tag
@@ -811,7 +813,7 @@ Flags: `--branch` — Schedule branch; `--commit` — Schedule commit hash; `--c
 Delete a pipeline schedule
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline schedule delete <uuid>`
 
 Flags: `--yes` — Confirm deletion
@@ -821,7 +823,7 @@ Flags: `--yes` — Confirm deletion
 Edit a pipeline schedule
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline schedule edit <uuid>`
 
 Flags: `--branch` — New branch; `--commit` — New commit; `--cron` — New cron expression; `--custom` — New custom selector; `--enabled` — Enable or disable; `--tag` — New tag
@@ -831,7 +833,7 @@ Flags: `--branch` — New branch; `--commit` — New commit; `--cron` — New cr
 List pipeline schedules
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline schedule list`
 
 ## `pipeline schedule runs <uuid>`
@@ -839,7 +841,7 @@ List pipeline schedules
 List schedule runs
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline schedule runs <uuid>`
 
 Flags: `--limit` — Maximum runs
@@ -849,7 +851,7 @@ Flags: `--limit` — Maximum runs
 List pipeline steps
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline steps <pipeline>`
 
 Flags: `--limit` — Maximum steps to return
@@ -859,7 +861,7 @@ Flags: `--limit` — Maximum steps to return
 Stop a pipeline
 
 - Classification: **write**
-- Required scopes: `write:pipeline:bitbucket`
+- Required scopes (API-token reference): `write:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline stop <pipeline>`
 
 Flags: `--yes` — Confirm stopping the pipeline
@@ -869,7 +871,7 @@ Flags: `--yes` — Confirm stopping the pipeline
 Read a pipeline test report
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline test-report <pipeline> [step]`
 
 Flags: `--cases` — Include test cases; `--output` — Write raw report output atomically to this file
@@ -879,7 +881,7 @@ Flags: `--cases` — Include test cases; `--output` — Write raw report output 
 Manage pipeline variables
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline variable`
 
 ## `pipeline variable delete <key-or-uuid>`
@@ -887,7 +889,7 @@ Manage pipeline variables
 Delete a pipeline variable
 
 - Classification: **write**
-- Required scopes: `admin:pipeline:bitbucket`
+- Required scopes (API-token reference): `admin:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline variable delete <key-or-uuid>`
 
 Flags: `--environment` — Deployment environment UUID; `--scope` — Variable scope; `--yes` — Confirm deletion
@@ -897,7 +899,7 @@ Flags: `--environment` — Deployment environment UUID; `--scope` — Variable s
 List pipeline variables
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline variable list`
 
 Flags: `--environment` — Deployment environment UUID; `--scope` — repository, workspace, or deployment
@@ -907,7 +909,7 @@ Flags: `--environment` — Deployment environment UUID; `--scope` — repository
 Create or update a pipeline variable
 
 - Classification: **write**
-- Required scopes: `admin:pipeline:bitbucket`
+- Required scopes (API-token reference): `admin:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline variable set <key>`
 
 Flags: `--create` — Require creation; `--environment` — Deployment environment UUID; `--scope` — Variable scope; `--secured` — Mark variable secured; `--update` — Require update; `--value-file` — Read value from a file; `--value-stdin` — Read value from stdin; `--value` — Variable value
@@ -917,7 +919,7 @@ Flags: `--create` — Require creation; `--environment` — Deployment environme
 Watch a pipeline until it finishes
 
 - Classification: **read**
-- Required scopes: `read:pipeline:bitbucket`
+- Required scopes (API-token reference): `read:pipeline:bitbucket`
 - Example: `bitbucket-cli pipeline watch <pipeline>`
 - JSON fields: `uuid,build_number,state,target,trigger,steps`
 
@@ -928,7 +930,7 @@ Flags: `--exit-status` — Exit non-zero for an unsuccessful result; `--interval
 Pull request commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli pr`
 
 ## `pr attach <id>`
@@ -936,7 +938,7 @@ Pull request commands
 Upload files and link them from a pull request comment
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr attach <id>`
 
 Flags: `--file` — Local file to upload (repeatable, required); `--message` — Optional markdown text before the attachment links
@@ -946,7 +948,7 @@ Flags: `--file` — Local file to upload (repeatable, required); `--message` —
 Check out a pull request locally
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr checkout [<selector>]`
 
 Flags: `--branch` — Local branch name (defaults to the pull request source branch); `--detach` — Check out the source commit without creating a local branch; `--force` — Allow resetting an existing or diverged local branch; `--recurse-submodules` — Initialize and update submodules recursively
@@ -956,7 +958,7 @@ Flags: `--branch` — Local branch name (defaults to the pull request source bra
 Show pull request commit checks
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr checks [<selector>]`
 
 Flags: `--interval` — Polling interval; `--watch` — Wait for checks to finish
@@ -966,7 +968,7 @@ Flags: `--interval` — Polling interval; `--watch` — Wait for checks to finis
 Create or manage pull request comments
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comment [<id>]`
 - JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
@@ -977,7 +979,7 @@ Flags: `--body-file` — Read the comment body from a file (- for stdin); `--bod
 Delete a pull request comment
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comment delete <pr> <comment-id>`
 - JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
@@ -988,7 +990,7 @@ Flags: `--yes` — Confirm deletion
 Edit a pull request comment
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comment edit <pr> <comment-id>`
 - JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
@@ -999,7 +1001,7 @@ Flags: `--body-file` — Read the replacement body from a file (- for stdin); `-
 List comments on a pull request
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr comments <id>`
 - JSON fields: `id,content,user,parent,inline,pending,resolution,created_on,updated_on`
 
@@ -1010,7 +1012,7 @@ Flags: `--limit` — Maximum comments to return
 List commits on a pull request
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr commits <id>`
 
 Flags: `--limit` — Maximum commits to return
@@ -1020,7 +1022,7 @@ Flags: `--limit` — Maximum commits to return
 Show pull request conflicts
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr conflicts [<selector>]`
 
 ## `pr create`
@@ -1028,7 +1030,7 @@ Show pull request conflicts
 Create a new pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr create`
 
 Flags: `--close-source-branch` — Close the source branch when the PR is merged; `--description-file` — Read description from file (- for stdin); `--description` — Description (markdown); `--destination` — Destination branch name (defaults to the repo main branch); `--source` — Source branch name (required); `--title` — Pull request title (required)
@@ -1038,7 +1040,7 @@ Flags: `--close-source-branch` — Close the source branch when the PR is merged
 Find the open pull request for the current branch
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr current`
 - JSON fields: `id,title,state,author,source,destination,reviewers`
 
@@ -1049,7 +1051,7 @@ Flags: `--web` — Open the current branch pull request in a browser
 Decline a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr decline [<selector>]`
 
 Flags: `--message-file` — Read decline message from a file (- for stdin); `--message` — Decline message; `--yes` — Confirm the destructive action
@@ -1059,7 +1061,7 @@ Flags: `--message-file` — Read decline message from a file (- for stdin); `--m
 Show pull request changes
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr diff [<selector>]`
 
 Flags: `--name-only` — Show changed filenames only; `--patch` — Show a patch; `--stat` — Show diffstat
@@ -1069,7 +1071,7 @@ Flags: `--name-only` — Show changed filenames only; `--patch` — Show a patch
 List pull requests for a repository
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr list`
 - JSON fields: `id,title,state,author,source,destination,reviewers`
 
@@ -1080,7 +1082,7 @@ Flags: `--author` — Filter by author account ID (e.g. from the Bitbucket profi
 Merge a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr merge [<selector>]`
 
 Flags: `--async` — Return after Bitbucket accepts an asynchronous merge; `--close-source-branch` — Close the source branch after merging; `--interval` — Merge task polling interval; `--message-file` — Read merge message from a file (- for stdin); `--message` — Merge commit message; `--strategy` — Merge strategy: merge_commit, squash, or fast_forward; `--timeout` — Maximum time to wait for an asynchronous merge
@@ -1090,7 +1092,7 @@ Flags: `--async` — Return after Bitbucket accepts an asynchronous merge; `--cl
 Remove your change request from a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr remove-change-request [<id>]`
 
 ## `pr reopen [<selector>]`
@@ -1098,7 +1100,7 @@ Remove your change request from a pull request
 Reopen a declined pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr reopen [<selector>]`
 
 ## `pr review [<id>]`
@@ -1106,7 +1108,7 @@ Reopen a declined pull request
 Approve, request changes, or comment on a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr review [<id>]`
 
 Flags: `--approve` — Approve the pull request; `--body-file` — Read the review/comment body from a file (- for stdin); `--body` — Review/comment body; `--comment` — Post a review comment without approving or requesting changes; `--request-changes` — Request changes (requires a non-empty review body)
@@ -1116,7 +1118,7 @@ Flags: `--approve` — Approve the pull request; `--body-file` — Read the revi
 Show pull requests for review or the current branch
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr status`
 - JSON fields: `id,title,state,author,source,destination,reviewers`
 
@@ -1127,7 +1129,7 @@ Flags: `--mine` — Show pull requests authored by the current account; `--revie
 Manage pull request tasks
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr task`
 
 ## `pr task create <pr>`
@@ -1135,7 +1137,7 @@ Manage pull request tasks
 Create a pull request task
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr task create <pr>`
 
 Flags: `--body-file` — Read task body from a file (- for stdin); `--body` — Task body; `--comment` — Associate the task with a comment ID
@@ -1145,7 +1147,7 @@ Flags: `--body-file` — Read task body from a file (- for stdin); `--body` — 
 Delete a pull request task
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr task delete <pr> <task-id>`
 
 Flags: `--yes` — Confirm deletion
@@ -1155,7 +1157,7 @@ Flags: `--yes` — Confirm deletion
 List pull request tasks
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr task list <pr>`
 - JSON fields: `id,content,state,comment,creator,pending,resolved_on,resolved_by,created_on,updated_on`
 
@@ -1166,7 +1168,7 @@ Flags: `--limit` — Maximum tasks to return; `--state` — Filter by task state
 Update a pull request task
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr task update <pr> <task-id>`
 
 Flags: `--body-file` — Read replacement task body from a file (- for stdin); `--body` — Replacement task body; `--state` — Task state: OPEN or RESOLVED
@@ -1176,7 +1178,7 @@ Flags: `--body-file` — Read replacement task body from a file (- for stdin); `
 Resolve or reopen pull request comment threads
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr thread`
 
 ## `pr thread reopen <pr> <comment-id>`
@@ -1184,7 +1186,7 @@ Resolve or reopen pull request comment threads
 Reopen a pull request comment thread
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr thread reopen <pr> <comment-id>`
 
 ## `pr thread resolve <pr> <comment-id>`
@@ -1192,7 +1194,7 @@ Reopen a pull request comment thread
 Resolve a pull request comment thread
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr thread resolve <pr> <comment-id>`
 
 ## `pr unapprove [<id>]`
@@ -1200,7 +1202,7 @@ Resolve a pull request comment thread
 Remove your approval from a pull request
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr unapprove [<id>]`
 
 ## `pr update <id>`
@@ -1208,7 +1210,7 @@ Remove your approval from a pull request
 Update a pull request's title and/or description
 
 - Classification: **write**
-- Required scopes: `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket, write:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr update <id>`
 
 Flags: `--description-file` — Read description from file (- for stdin); `--description` — New description (markdown); `--title` — New pull request title
@@ -1218,7 +1220,7 @@ Flags: `--description-file` — Read description from file (- for stdin); `--des
 View a pull request by ID, URL, or current branch
 
 - Classification: **read**
-- Required scopes: `read:pullrequest:bitbucket`
+- Required scopes (API-token reference): `read:pullrequest:bitbucket`
 - Example: `bitbucket-cli pr view [<selector>]`
 - JSON fields: `id,title,state,author,source,destination,reviewers`
 
@@ -1229,7 +1231,7 @@ Flags: `--activity` — Include pull request activity; `--comments` — Include 
 Project commands
 
 - Classification: **read**
-- Required scopes: `read:project:bitbucket`
+- Required scopes (API-token reference): `read:project:bitbucket`
 - Example: `bitbucket-cli project`
 - JSON fields: `key,name,uuid,description,is_private,links,repositories`
 
@@ -1238,7 +1240,7 @@ Project commands
 Create a project
 
 - Classification: **write**
-- Required scopes: `admin:project:bitbucket`
+- Required scopes (API-token reference): `admin:project:bitbucket`
 - Example: `bitbucket-cli project create --key <key> --name <name>`
 - JSON fields: `key,name,uuid,description,is_private,links,repositories`
 
@@ -1249,7 +1251,7 @@ Flags: `--description` — Project description; `--key` — Project key (require
 Delete a project
 
 - Classification: **write**
-- Required scopes: `admin:project:bitbucket`
+- Required scopes (API-token reference): `admin:project:bitbucket`
 - Example: `bitbucket-cli project delete <key-or-uuid> --yes`
 - JSON fields: `key,name,uuid,description,is_private,links,repositories`
 
@@ -1260,7 +1262,7 @@ Flags: `--workspace` — Workspace slug or UUID; `--yes` — Confirm deletion
 Edit a project
 
 - Classification: **write**
-- Required scopes: `admin:project:bitbucket`
+- Required scopes (API-token reference): `admin:project:bitbucket`
 - Example: `bitbucket-cli project edit <key-or-uuid>`
 - JSON fields: `key,name,uuid,description,is_private,links,repositories`
 
@@ -1271,7 +1273,7 @@ Flags: `--description` — New project description; `--key` — New project key;
 List projects
 
 - Classification: **read**
-- Required scopes: `read:project:bitbucket`
+- Required scopes (API-token reference): `read:project:bitbucket`
 - Example: `bitbucket-cli project list`
 - JSON fields: `key,name,uuid,description,is_private,links,repositories`
 
@@ -1282,7 +1284,7 @@ Flags: `--limit` — Maximum projects to return; `--query` — Bitbucket q expre
 View a project
 
 - Classification: **read**
-- Required scopes: `read:project:bitbucket`
+- Required scopes (API-token reference): `read:project:bitbucket`
 - Example: `bitbucket-cli project view <key-or-uuid>`
 - JSON fields: `key,name,uuid,description,is_private,links,repositories`
 
@@ -1293,7 +1295,7 @@ Flags: `--repos` — Include repositories in the project; `--web` — Open the p
 Repository commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli repo`
 
 ## `repo browse [<workspace/repo>] [<path>]`
@@ -1301,7 +1303,7 @@ Repository commands
 Open a repository path in a browser
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli repo browse [<workspace/repo>] [<path>]`
 
 Flags: `--branch` — Branch or ref to browse
@@ -1311,7 +1313,7 @@ Flags: `--branch` — Branch or ref to browse
 Clone a repository
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli repo clone <workspace/repo|url> [<directory>] [-- <git-flags>...]`
 
 Flags: `--protocol` — Clone protocol: https or ssh (defaults to config)
@@ -1321,7 +1323,7 @@ Flags: `--protocol` — Clone protocol: https or ssh (defaults to config)
 Create a repository
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli repo create <name>`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -1332,7 +1334,7 @@ Flags: `--clone` — Clone after creation; `--description` — Repository descri
 Delete a repository
 
 - Classification: **delete**
-- Required scopes: `delete:repository:bitbucket`
+- Required scopes (API-token reference): `delete:repository:bitbucket`
 - Example: `bitbucket-cli repo delete [<workspace/repo>]`
 
 Flags: `--yes` — Confirm deletion
@@ -1342,7 +1344,7 @@ Flags: `--yes` — Confirm deletion
 Edit a repository
 
 - Classification: **admin**
-- Required scopes: `admin:repository:bitbucket`
+- Required scopes (API-token reference): `admin:repository:bitbucket`
 - Example: `bitbucket-cli repo edit [<workspace/repo>]`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -1353,7 +1355,7 @@ Flags: `--description` — New repository description; `--fork-policy` — Fork 
 Fork a repository
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket, write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket, write:repository:bitbucket`
 - Example: `bitbucket-cli repo fork [<workspace/repo>]`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -1364,7 +1366,7 @@ Flags: `--clone` — Clone the fork after creation; `--directory` — Directory 
 List repositories in a workspace
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli repo list [<workspace>]`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -1375,7 +1377,7 @@ Flags: `--fork` — Only fork repositories; `--limit` — Maximum repositories t
 Set the local repository default
 
 - Classification: **write**
-- Required scopes: `none (local git configuration)`
+- Required scopes (API-token reference): `none (local git configuration)`
 - Example: `bitbucket-cli repo set-default [<workspace/repo>]`
 
 Flags: `--value` — Repository selector (normally use the positional argument)
@@ -1385,7 +1387,7 @@ Flags: `--value` — Repository selector (normally use the positional argument)
 View a repository
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli repo view [<workspace/repo>]`
 - JSON fields: `uuid,full_name,name,is_private,mainbranch,links`
 
@@ -1396,7 +1398,7 @@ Flags: `--branch` — Branch or ref used for --readme; `--readme` — Print the 
 Manage Code Insights reports
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli report`
 - JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
@@ -1405,7 +1407,7 @@ Manage Code Insights reports
 Delete a Code Insights report
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli report delete <commit> <report-id>`
 - JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
@@ -1416,7 +1418,7 @@ Flags: `--yes` — Confirm deletion
 List reports for a commit
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli report list <commit>`
 - JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
@@ -1427,7 +1429,7 @@ Flags: `--limit` — Maximum reports to return
 Create or update a Code Insights report
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket and write:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket and write:repository:bitbucket`
 - Example: `bitbucket-cli report upsert <commit> <report-id>`
 
 > Warning: report payloads and annotations are visible to repository users with access; never include secrets.
@@ -1440,7 +1442,7 @@ Flags: `--data-file` — JSON report fields; `--details` — Report details; `--
 View a Code Insights report
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli report view <commit> <report-id>`
 - JSON fields: `uuid,title,details,result,reporter,report_type,data,created_on,updated_on`
 
@@ -1449,7 +1451,7 @@ View a Code Insights report
 Manage account SSH keys
 
 - Classification: **read**
-- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
+- Required scopes (API-token reference): `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
 - Example: `bitbucket-cli ssh-key`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1458,7 +1460,7 @@ Manage account SSH keys
 Add an account SSH key
 
 - Classification: **write**
-- Required scopes: `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
+- Required scopes (API-token reference): `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
 - Example: `bitbucket-cli ssh-key add --file <public-key>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1469,7 +1471,7 @@ Flags: `--expires` — Expiry date (YYYY-MM-DD) or RFC3339; `--file` — OpenSSH
 Delete an account SSH key
 
 - Classification: **delete**
-- Required scopes: `delete:ssh-key:bitbucket and read:user:bitbucket`
+- Required scopes (API-token reference): `delete:ssh-key:bitbucket and read:user:bitbucket`
 - Example: `bitbucket-cli ssh-key delete <id> --yes`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1480,7 +1482,7 @@ Flags: `--user` — Unsupported for writes; omit this flag; `--yes` — Confirm 
 Edit an account SSH key
 
 - Classification: **write**
-- Required scopes: `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
+- Required scopes (API-token reference): `read:ssh-key:bitbucket, write:ssh-key:bitbucket, read:user:bitbucket`
 - Example: `bitbucket-cli ssh-key edit <id>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1491,7 +1493,7 @@ Flags: `--label` — New key label; `--user` — Unsupported for writes; omit th
 List account SSH keys
 
 - Classification: **read**
-- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
+- Required scopes (API-token reference): `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
 - Example: `bitbucket-cli ssh-key list`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1502,7 +1504,7 @@ Flags: `--limit` — Maximum keys to return; `--user` — User selector for read
 View an account SSH key
 
 - Classification: **read**
-- Required scopes: `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
+- Required scopes (API-token reference): `read:ssh-key:bitbucket (plus read:user:bitbucket when --user is omitted)`
 - Example: `bitbucket-cli ssh-key view <id>`
 - JSON fields: `uuid,id,label,algorithm,fingerprint,created_on,last_used,expires_on,scope`
 
@@ -1513,7 +1515,7 @@ Flags: `--user` — User selector for read operations
 Check bitbucket-cli configuration
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli status`
 
 ## `tag`
@@ -1521,7 +1523,7 @@ Check bitbucket-cli configuration
 Tag commands
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli tag`
 
 ## `tag create <name> --target <commit|branch>`
@@ -1529,7 +1531,7 @@ Tag commands
 Create a tag
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli tag create <name> --target <commit|branch>`
 
 Flags: `--message` — Annotated tag message (Bitbucket creates an annotated tag and supplies a default when omitted); `--target` — Commit hash or branch to point at
@@ -1539,7 +1541,7 @@ Flags: `--message` — Annotated tag message (Bitbucket creates an annotated tag
 Delete a tag
 
 - Classification: **write**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli tag delete <name> --yes`
 
 Flags: `--yes` — Confirm deletion
@@ -1549,7 +1551,7 @@ Flags: `--yes` — Confirm deletion
 List tags in a repository
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli tag list`
 - JSON fields: `name,target,message,links,requested_target,resolved_target`
 
@@ -1560,7 +1562,7 @@ Flags: `--limit` — Maximum tags to return; `--query` — Bitbucket q expressio
 View a tag
 
 - Classification: **read**
-- Required scopes: `read:repository:bitbucket`
+- Required scopes (API-token reference): `read:repository:bitbucket`
 - Example: `bitbucket-cli tag view <name>`
 - JSON fields: `name,target,message,links,requested_target,resolved_target`
 
@@ -1569,7 +1571,7 @@ View a tag
 Manage Bitbucket webhooks
 
 - Classification: **read**
-- Required scopes: `read:webhook:bitbucket`
+- Required scopes (API-token reference): `read:webhook:bitbucket`
 - Example: `bitbucket-cli webhook`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1578,7 +1580,7 @@ Manage Bitbucket webhooks
 Apply declarative webhook configuration
 
 - Classification: **write**
-- Required scopes: `read:webhook:bitbucket, write:webhook:bitbucket (plus delete:webhook:bitbucket with --prune)`
+- Required scopes (API-token reference): `read:webhook:bitbucket, write:webhook:bitbucket (plus delete:webhook:bitbucket with --prune)`
 - Example: `bitbucket-cli webhook apply --file <yaml|json>`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1589,7 +1591,7 @@ Flags: `--allow-insecure-localhost` — Allow http://localhost destinations; `--
 Create a webhook
 
 - Classification: **write**
-- Required scopes: `read:webhook:bitbucket and write:webhook:bitbucket`
+- Required scopes (API-token reference): `read:webhook:bitbucket and write:webhook:bitbucket`
 - Example: `bitbucket-cli webhook create --url <https-url> --event <key>...`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1600,7 +1602,7 @@ Flags: `--active-set` — Send the active value (including false); `--active` �
 Delete a webhook
 
 - Classification: **delete**
-- Required scopes: `delete:webhook:bitbucket`
+- Required scopes (API-token reference): `delete:webhook:bitbucket`
 - Example: `bitbucket-cli webhook delete <uuid> --yes`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1611,7 +1613,7 @@ Flags: `--repository` — Repository selector (workspace/repo or URL); `--worksp
 Edit a webhook
 
 - Classification: **write**
-- Required scopes: `read:webhook:bitbucket and write:webhook:bitbucket`
+- Required scopes (API-token reference): `read:webhook:bitbucket and write:webhook:bitbucket`
 - Example: `bitbucket-cli webhook edit <uuid>`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1622,7 +1624,7 @@ Flags: `--active` — Whether the webhook is active; `--allow-insecure-localhost
 List webhook event keys
 
 - Classification: **read**
-- Required scopes: `none (public event catalog)`
+- Required scopes (API-token reference): `none (public event catalog)`
 - Example: `bitbucket-cli webhook events [subject]`
 - JSON fields: `event`
 
@@ -1633,7 +1635,7 @@ Flags: `--no-event-cache` — Do not read or write the event catalog cache; `--s
 Export webhooks as declarative YAML or JSON
 
 - Classification: **read**
-- Required scopes: `read:webhook:bitbucket`
+- Required scopes (API-token reference): `read:webhook:bitbucket`
 - Example: `bitbucket-cli webhook export --output <file>`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1644,7 +1646,7 @@ Flags: `--output` — Output YAML or JSON file (required); `--repository` — Re
 List webhooks
 
 - Classification: **read**
-- Required scopes: `read:webhook:bitbucket`
+- Required scopes (API-token reference): `read:webhook:bitbucket`
 - Example: `bitbucket-cli webhook list`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1655,7 +1657,7 @@ Flags: `--limit` — Maximum webhooks to return; `--repository` — Repository s
 View a webhook
 
 - Classification: **read**
-- Required scopes: `read:webhook:bitbucket`
+- Required scopes (API-token reference): `read:webhook:bitbucket`
 - Example: `bitbucket-cli webhook view <uuid>`
 - JSON fields: `uuid,description,url,active,events,created_at,updated_at,subject`
 
@@ -1666,7 +1668,7 @@ Flags: `--repository` — Repository selector (workspace/repo or URL); `--worksp
 Workspace and membership commands
 
 - Classification: **read**
-- Required scopes: `read:workspace:bitbucket`
+- Required scopes (API-token reference): `read:workspace:bitbucket`
 - Example: `bitbucket-cli workspace`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1675,7 +1677,7 @@ Workspace and membership commands
 Invite a workspace member
 
 - Classification: **write**
-- Required scopes: `admin:workspace:bitbucket`
+- Required scopes (API-token reference): `admin:workspace:bitbucket`
 - Example: `bitbucket-cli workspace invite <email>`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1686,7 +1688,7 @@ Flags: `--group` — Workspace group slug (unsupported until invitations are exp
 List workspaces
 
 - Classification: **read**
-- Required scopes: `read:workspace:bitbucket`
+- Required scopes (API-token reference): `read:workspace:bitbucket`
 - Example: `bitbucket-cli workspace list`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1697,7 +1699,7 @@ Flags: `--limit` — Maximum workspaces to return; `--query` — Bitbucket q exp
 Workspace member commands
 
 - Classification: **read**
-- Required scopes: `read:workspace:bitbucket`
+- Required scopes (API-token reference): `read:workspace:bitbucket`
 - Example: `bitbucket-cli workspace member`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1706,7 +1708,7 @@ Workspace member commands
 View a workspace member
 
 - Classification: **read**
-- Required scopes: `read:workspace:bitbucket`
+- Required scopes (API-token reference): `read:workspace:bitbucket`
 - Example: `bitbucket-cli workspace member view <user-selector>`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1715,7 +1717,7 @@ View a workspace member
 List workspace members
 
 - Classification: **read**
-- Required scopes: `read:workspace:bitbucket`
+- Required scopes (API-token reference): `read:workspace:bitbucket`
 - Example: `bitbucket-cli workspace members [<workspace>]`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1726,7 +1728,7 @@ Flags: `--limit` — Maximum members to return; `--query` — Bitbucket q expres
 Remove a workspace member
 
 - Classification: **write**
-- Required scopes: `admin:workspace:bitbucket`
+- Required scopes (API-token reference): `admin:workspace:bitbucket`
 - Example: `bitbucket-cli workspace remove-member <user-selector> --yes`
 - JSON fields: `name,slug,uuid,links,members,projects`
 
@@ -1737,7 +1739,7 @@ Flags: `--yes` — Confirm member removal
 View a workspace
 
 - Classification: **read**
-- Required scopes: `read:workspace:bitbucket`
+- Required scopes (API-token reference): `read:workspace:bitbucket`
 - Example: `bitbucket-cli workspace view [<workspace>]`
 - JSON fields: `name,slug,uuid,links,members,projects`
 

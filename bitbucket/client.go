@@ -34,137 +34,173 @@ const (
 // excerptLimit bounds how much of an error response body is surfaced.
 const excerptLimit = 500
 
-// RequiredScopes maps an API path to the documented Bitbucket API-token scopes
-// that cover it, for surfacing actionable guidance on 403 responses. Bitbucket
-// does not expose a universal scope-introspection endpoint, so this is a
-// conservative, command-family-level registry rather than an exact claim.
-func RequiredScopes(path string) string {
-	return RequiredScopesFor(http.MethodGet, path)
+// ScopeHint is the credential-aware, conservative permission guidance for an
+// endpoint. Scopes are remediation hints, not live scope introspection.
+type ScopeHint struct {
+	CredentialKind auth.TokenType `json:"credentialKind"`
+	Scopes         []string       `json:"scopes,omitempty"`
+	Note           string         `json:"note,omitempty"`
 }
 
-// RequiredScopesFor returns the documented token scopes for an HTTP operation.
-func RequiredScopesFor(method, path string) string {
+// EndpointPermissions keeps permission names for each Bitbucket credential
+// model separate. The names are not interchangeable: API tokens use the
+// Atlassian `read:...:bitbucket` family, while bearer credentials use their
+// resource/OAuth permission family.
+type EndpointPermissions struct {
+	APITokenScopes    []string
+	AccessTokenScopes []string
+	OAuthScopes       []string
+	Note              string
+}
+
+const scopeHintNote = "This is documented remediation guidance, not live scope introspection; resource or event configuration may require additional permissions."
+
+// RequiredScopes returns the documented permission hint for a GET operation.
+func RequiredScopes(kind auth.TokenType, path string) ScopeHint {
+	return RequiredScopesFor(kind, http.MethodGet, path)
+}
+
+// RequiredScopesFor returns the documented permission hint for an HTTP
+// operation, selected for the active credential kind. Unknown kinds deliberately
+// receive no credential-specific scopes rather than a potentially misleading
+// guess.
+func RequiredScopesFor(kind auth.TokenType, method, path string) ScopeHint {
+	permissions := endpointPermissions(method, path)
+	hint := ScopeHint{CredentialKind: kind, Note: permissions.Note}
+	switch kind {
+	case auth.TokenAPI:
+		hint.Scopes = append([]string(nil), permissions.APITokenScopes...)
+	case auth.TokenAccess:
+		hint.Scopes = append([]string(nil), permissions.AccessTokenScopes...)
+	case auth.TokenOAuth:
+		hint.Scopes = append([]string(nil), permissions.OAuthScopes...)
+	default:
+		hint.Note = "The credential type is unknown; no credential-specific permission hint is available."
+	}
+	return hint
+}
+
+func permission(api, access, oauth []string) EndpointPermissions {
+	return EndpointPermissions{APITokenScopes: api, AccessTokenScopes: access, OAuthScopes: oauth, Note: scopeHintNote}
+}
+
+func endpointPermissions(method, path string) EndpointPermissions {
+	readRepo := permission([]string{"read:repository:bitbucket"}, []string{"repository:read"}, []string{"repository"})
+	writeRepo := permission([]string{"read:repository:bitbucket", "write:repository:bitbucket"}, []string{"repository:read", "repository:write"}, []string{"repository", "repository:write"})
+	adminRepo := permission([]string{"admin:repository:bitbucket"}, []string{"repository:admin"}, []string{"repository:admin"})
+	deleteRepo := permission([]string{"delete:repository:bitbucket"}, []string{"repository:delete"}, []string{"repository:delete"})
+
 	switch {
 	case strings.Contains(path, "/hook_events"):
-		// The public event catalog is intentionally unauthenticated.
-		return ""
+		return EndpointPermissions{Note: "The public event catalog normally requires no authentication."}
 	case strings.Contains(path, "/hooks"):
 		switch method {
 		case http.MethodGet:
-			return "read:webhook:bitbucket"
+			return permission([]string{"read:webhook:bitbucket"}, []string{"webhook:read"}, []string{"webhook"})
 		case http.MethodDelete:
-			return "delete:webhook:bitbucket"
+			return permission([]string{"delete:webhook:bitbucket"}, []string{"webhook:delete"}, []string{"webhook:write"})
 		default:
-			return "read:webhook:bitbucket and write:webhook:bitbucket"
+			return permission([]string{"read:webhook:bitbucket", "write:webhook:bitbucket"}, []string{"webhook:read", "webhook:write"}, []string{"webhook", "webhook:write"})
 		}
 	case strings.HasSuffix(strings.Split(path, "?")[0], "/user"):
-		return "read:user:bitbucket"
+		return permission([]string{"read:user:bitbucket"}, []string{"account:read"}, []string{"account"})
 	case strings.Contains(path, "/ssh-keys"):
 		switch method {
 		case http.MethodGet:
-			return "read:ssh-key:bitbucket"
+			return permission([]string{"read:ssh-key:bitbucket"}, []string{"account:read"}, []string{"account"})
 		case http.MethodDelete:
-			return "delete:ssh-key:bitbucket"
+			return permission([]string{"delete:ssh-key:bitbucket"}, []string{"account:write"}, []string{"account:write"})
 		default:
-			return "read:ssh-key:bitbucket and write:ssh-key:bitbucket"
+			return permission([]string{"read:ssh-key:bitbucket", "write:ssh-key:bitbucket"}, []string{"account:read", "account:write"}, []string{"account", "account:write"})
 		}
 	case strings.Contains(path, "/deploy-keys"):
 		switch method {
 		case http.MethodGet:
-			return "admin:repository:bitbucket"
+			return permission([]string{"admin:repository:bitbucket"}, []string{"repository:admin"}, []string{"repository:admin"})
 		case http.MethodDelete:
-			return "delete:ssh-key:bitbucket and admin:repository:bitbucket"
+			return permission([]string{"delete:ssh-key:bitbucket", "admin:repository:bitbucket"}, []string{"repository:admin"}, []string{"repository:admin"})
 		default:
-			return "write:ssh-key:bitbucket and admin:repository:bitbucket"
+			return permission([]string{"write:ssh-key:bitbucket", "admin:repository:bitbucket"}, []string{"repository:admin"}, []string{"repository:admin"})
 		}
 	case strings.Contains(path, "/permissions-config/"):
 		if method == http.MethodGet {
-			return "read:repository:bitbucket"
+			return readRepo
 		}
 		if method == http.MethodDelete {
-			return "admin:repository:bitbucket and delete:permission:bitbucket"
+			return permission([]string{"admin:repository:bitbucket", "delete:permission:bitbucket"}, []string{"repository:admin"}, []string{"repository:admin"})
 		}
-		return "admin:repository:bitbucket and write:permission:bitbucket"
+		return permission([]string{"admin:repository:bitbucket", "write:permission:bitbucket"}, []string{"repository:admin"}, []string{"repository:admin"})
 	case strings.Contains(path, "/permissions/repositories"):
-		return "admin:workspace:bitbucket"
+		return permission([]string{"admin:workspace:bitbucket"}, []string{"workspace:admin"}, []string{"workspace:admin"})
 	case strings.Contains(path, "/workspaces/") && strings.Contains(path, "/projects"):
-		switch method {
-		case http.MethodGet:
-			return "read:project:bitbucket"
-		case http.MethodDelete, http.MethodPost, http.MethodPut:
-			return "admin:project:bitbucket"
+		if method == http.MethodGet {
+			return permission([]string{"read:project:bitbucket"}, []string{"project:read"}, []string{"project"})
 		}
-		return "admin:project:bitbucket"
+		return permission([]string{"admin:project:bitbucket"}, []string{"project:admin"}, []string{"project:admin"})
 	case strings.Contains(path, "/workspaces/") && strings.Contains(path, "/members"):
-		return "read:workspace:bitbucket"
-	case strings.Contains(path, "/reports") || strings.Contains(path, "/annotations"):
+		return permission([]string{"read:workspace:bitbucket"}, []string{"workspace:read"}, []string{"workspace"})
+	case strings.Contains(path, "/reports") || strings.Contains(path, "/annotations"), strings.Contains(path, "/statuses"):
 		if method == http.MethodGet {
-			return "read:repository:bitbucket"
+			return readRepo
 		}
-		return "read:repository:bitbucket and write:repository:bitbucket"
-	case strings.Contains(path, "/statuses"):
-		if method == http.MethodGet {
-			return "read:repository:bitbucket"
-		}
-		return "read:repository:bitbucket and write:repository:bitbucket"
+		return writeRepo
 	case strings.Contains(path, "/commit/") && (strings.Contains(path, "/approve") || strings.Contains(path, "/comments")):
 		if method == http.MethodGet {
-			return "read:repository:bitbucket"
+			return readRepo
 		}
-		return "read:repository:bitbucket and write:repository:bitbucket"
+		return writeRepo
 	case strings.Contains(path, "/downloads"):
-		return "write:repository:bitbucket"
-	case strings.Contains(path, "/pullrequests") && method != http.MethodGet:
-		return "read:pullrequest:bitbucket and write:pullrequest:bitbucket"
+		return permission([]string{"write:repository:bitbucket"}, []string{"repository:write"}, []string{"repository:write"})
 	case strings.Contains(path, "/pullrequests"):
-		return "read:pullrequest:bitbucket"
+		if method == http.MethodGet {
+			return permission([]string{"read:pullrequest:bitbucket"}, []string{"pullrequest:read"}, []string{"pullrequest"})
+		}
+		return permission([]string{"read:pullrequest:bitbucket", "write:pullrequest:bitbucket"}, []string{"pullrequest:read", "pullrequest:write"}, []string{"pullrequest", "pullrequest:write"})
 	case strings.Contains(path, "/refs/branches"), strings.Contains(path, "/refs/tags"), strings.Contains(path, "/commits"):
 		if method == http.MethodGet {
-			return "read:repository:bitbucket"
+			return readRepo
 		}
-		return "write:repository:bitbucket"
+		return permission([]string{"write:repository:bitbucket"}, []string{"repository:write"}, []string{"repository:write"})
 	case strings.Contains(path, "/branch-restrictions"), strings.Contains(path, "/branching-model/settings"):
-		return "admin:repository:bitbucket"
+		return adminRepo
 	case strings.Contains(path, "/default-reviewers"):
 		if method == http.MethodGet {
-			return "read:pullrequest:bitbucket"
+			return permission([]string{"read:pullrequest:bitbucket"}, []string{"pullrequest:read"}, []string{"pullrequest"})
 		}
-		return "admin:repository:bitbucket"
+		return adminRepo
 	case strings.Contains(path, "/pipelines-config/variables") || (strings.Contains(path, "/deployments/") && strings.Contains(path, "/variables")):
 		if method == http.MethodGet {
-			return "read:pipeline:bitbucket"
+			return permission([]string{"read:pipeline:bitbucket"}, []string{"pipeline:read"}, []string{"pipeline:read"})
 		}
-		return "admin:pipeline:bitbucket"
+		return permission([]string{"admin:pipeline:bitbucket"}, []string{"pipeline:write"}, []string{"pipeline:write"})
 	case strings.Contains(path, "/pipelines-config/runners"):
 		switch method {
 		case http.MethodGet:
-			return "read:runner:bitbucket"
+			return permission([]string{"read:runner:bitbucket"}, []string{"runner:read"}, []string{"runner"})
 		case http.MethodPost, http.MethodPut:
-			return "read:runner:bitbucket and write:runner:bitbucket"
+			return permission([]string{"read:runner:bitbucket", "write:runner:bitbucket"}, []string{"runner:read", "runner:write"}, []string{"runner", "runner:write"})
 		default:
-			return "write:runner:bitbucket"
+			return permission([]string{"write:runner:bitbucket"}, []string{"runner:write"}, []string{"runner:write"})
 		}
 	case strings.Contains(path, "/pipeline"):
 		if method == http.MethodGet {
-			return "pipeline:read"
+			return permission([]string{"read:pipeline:bitbucket"}, []string{"pipeline:read"}, []string{"pipeline:read"})
 		}
-		return "pipeline:write"
+		return permission([]string{"write:pipeline:bitbucket"}, []string{"pipeline:write"}, []string{"pipeline:write"})
 	case strings.Contains(path, "/repositories/") && strings.HasSuffix(strings.Split(strings.Split(path, "?")[0], "/repositories/")[1], "/forks") && method == http.MethodPost:
-		return "read:repository:bitbucket and write:repository:bitbucket"
-	case repositoryResourcePath(path) && method == http.MethodPost:
-		return "admin:repository:bitbucket"
-	case repositoryResourcePath(path) && method == http.MethodPut:
-		return "admin:repository:bitbucket"
+		return writeRepo
+	case repositoryResourcePath(path) && method == http.MethodPost, repositoryResourcePath(path) && method == http.MethodPut:
+		return adminRepo
 	case repositoryResourcePath(path) && method == http.MethodDelete:
-		return "delete:repository:bitbucket"
+		return deleteRepo
 	case strings.Contains(path, "/repositories") && method != http.MethodGet:
-		return "write:repository:bitbucket"
+		return permission([]string{"write:repository:bitbucket"}, []string{"repository:write"}, []string{"repository:write"})
 	case strings.Contains(path, "/workspaces"):
-		return "read:workspace:bitbucket"
+		return permission([]string{"read:workspace:bitbucket"}, []string{"workspace:read"}, []string{"workspace"})
 	case method == http.MethodGet:
-		return "read:repository:bitbucket"
+		return readRepo
 	default:
-		return "admin:repository:bitbucket"
+		return adminRepo
 	}
 }
 
@@ -179,13 +215,17 @@ func repositoryResourcePath(path string) bool {
 	return false
 }
 
-// HTTPError is a normalized non-2xx response from Bitbucket.
+// HTTPError is a normalized non-2xx response from Bitbucket. RequiredScopes
+// is selected when the error is constructed, using the active provider kind.
 type HTTPError struct {
-	Method     string `json:"method"`
-	URL        string `json:"url"`
-	Status     int    `json:"status"`
-	StatusText string `json:"statusText"`
-	Excerpt    string `json:"excerpt"`
+	Method         string   `json:"method"`
+	URL            string   `json:"url"`
+	Status         int      `json:"status"`
+	StatusText     string   `json:"statusText"`
+	Excerpt        string   `json:"excerpt"`
+	CredentialKind string   `json:"credentialKind,omitempty"`
+	RequiredScopes []string `json:"requiredScopes,omitempty"`
+	ScopeNote      string   `json:"scopeNote,omitempty"`
 }
 
 func (e *HTTPError) Error() string {
@@ -193,17 +233,40 @@ func (e *HTTPError) Error() string {
 	case http.StatusUnauthorized:
 		return "Bitbucket authentication failed. Run `bitbucket-cli auth login` or set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN."
 	case http.StatusForbidden:
-		scope := RequiredScopesFor(e.Method, e.URL)
-		if scope == "" {
-			return "Bitbucket authorization failed for a public endpoint; check the request and account access."
+		label := credentialLabel(auth.TokenType(e.CredentialKind))
+		if label == "" {
+			return "Bitbucket authorization failed. The credential type is unknown; check the request and account access."
 		}
-		return fmt.Sprintf("Bitbucket authorization failed. The endpoint requires the %s scope; check the token's granted scopes.", scope)
+		if len(e.RequiredScopes) == 0 {
+			if strings.Contains(e.ScopeNote, "public event catalog") {
+				return "Bitbucket authorization failed for a public endpoint; check the request and account access."
+			}
+			return fmt.Sprintf("Bitbucket authorization failed for %s. No credential-specific permission hint is available; check the request and account access.", label)
+		}
+		message := fmt.Sprintf("Bitbucket authorization failed for %s. This operation normally requires %s; check the token's granted permissions.", label, strings.Join(e.RequiredScopes, " and "))
+		if e.ScopeNote != "" {
+			message += " " + e.ScopeNote
+		}
+		return message
 	case http.StatusNotFound:
 		return "Bitbucket resource not found. Check workspace, repo, and IDs."
 	case http.StatusTooManyRequests:
 		return "Bitbucket rate limit reached. Retry later."
 	default:
 		return fmt.Sprintf("Bitbucket request failed with %d %s: %s", e.Status, e.StatusText, e.Excerpt)
+	}
+}
+
+func credentialLabel(kind auth.TokenType) string {
+	switch kind {
+	case auth.TokenAPI:
+		return "an API token"
+	case auth.TokenAccess:
+		return "a Bitbucket access token"
+	case auth.TokenOAuth:
+		return "an OAuth token"
+	default:
+		return ""
 	}
 }
 
@@ -621,12 +684,16 @@ func (c *Client) httpError(req *http.Request, status int, payload []byte) *HTTPE
 		urlStr = auth.Redact(urlStr, secret)
 		exc = auth.Redact(exc, secret)
 	}
+	hint := RequiredScopesFor(auth.TokenType(auth.ProviderKind(c.auth)), req.Method, req.URL.String())
 	return &HTTPError{
-		Method:     req.Method,
-		URL:        urlStr,
-		Status:     status,
-		StatusText: http.StatusText(status),
-		Excerpt:    exc,
+		Method:         req.Method,
+		URL:            urlStr,
+		Status:         status,
+		StatusText:     http.StatusText(status),
+		Excerpt:        exc,
+		CredentialKind: string(hint.CredentialKind),
+		RequiredScopes: hint.Scopes,
+		ScopeNote:      hint.Note,
 	}
 }
 
