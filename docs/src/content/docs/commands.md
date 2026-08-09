@@ -27,11 +27,13 @@ bitbucket-cli auth token
 ```
 
 `auth login` validates credentials against Bitbucket before storing the token in
-the OS credential store. `--with-token` reads the token from stdin (required when
-stdin is not a TTY). `auth status` reports the account, credential source, token
-type, and whether the token can read the resolved repository — it never prints
-the token. `auth logout` removes only the stored profile and never mutates
-environment variables.
+the OS credential store. API tokens use Basic authentication and require an
+email; access and OAuth tokens use `Authorization: Bearer`, and access-token
+login probes a repository instead of `/user`. `--with-token` reads the token
+from stdin (required when stdin is not a TTY). `auth status` reports the account,
+credential source, token type, and whether the token can read the resolved
+repository — it never prints the token. `auth logout` removes only the stored
+profile and never mutates environment variables.
 
 ## Workspace, project, and permission commands
 

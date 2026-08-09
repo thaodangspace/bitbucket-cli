@@ -57,8 +57,11 @@ bitbucket-cli auth token                 # opt-in: print the token for scripts
 ```
 
 `--token-type api|access|oauth` selects API tokens (default), Bitbucket access
-tokens, or OAuth bearer tokens. Tokens are never echoed by these commands; a
-legacy plaintext `api_token` in YAML is migrated by `auth login` and removed.
+tokens, or OAuth bearer tokens. API tokens use HTTP Basic with the Atlassian
+account email; access and OAuth tokens use `Authorization: Bearer`. Access
+tokens are resource-scoped, so login validates the selected/default repository
+and does not require an email. Tokens are never echoed by these commands; a
+legacy plaintext `api_token` in YAML is migrated by API-token login and removed.
 
 ### Environment variables
 
@@ -87,8 +90,10 @@ clone_protocol: https                # optional: https|ssh
 ```
 
 All keys are optional; environment variables take precedence over file values.
-The token itself resolves from the OS credential store. Manage the file with the
-`config` command instead of editing it by hand:
+The token itself resolves from the OS credential store. Bearer profiles also
+persist a non-secret `credential_key` to namespace their store entry per config
+file; API-token entries remain keyed by email for compatibility. Manage the file
+with the `config` command instead of editing it by hand:
 
 ```bash
 bitbucket-cli config set email you@example.com
@@ -99,8 +104,10 @@ bitbucket-cli config list          # API token redacted
 bitbucket-cli config path          # print the resolved file path
 ```
 
-The token must be an Atlassian API token with access to the target workspace.
-Recommended scopes: `read:repository:bitbucket`, `read:pullrequest:bitbucket`,
+API tokens must be Atlassian API tokens with access to the target workspace.
+Bitbucket access tokens are resource-scoped and use Bearer authentication; they
+must be validated against a repository context with repository-read access.
+OAuth tokens also use Bearer. Recommended scopes: `read:repository:bitbucket`, `read:pullrequest:bitbucket`,
 and `write:pullrequest:bitbucket` to create/update PRs and post comments. Add
 `write:repository:bitbucket` when using `pr attach`, which uploads files to
 repository Downloads before commenting links on the PR. On a `403` the CLI names

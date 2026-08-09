@@ -34,11 +34,12 @@ func init() {
 	loginCmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with Bitbucket and save credentials securely",
-		Long: "Authenticate with Bitbucket Cloud. Prompts for the Atlassian account " +
-			"email and token when attached to a TTY, or reads the token from stdin " +
-			"when --with-token is given. Validates the credential with GET /user " +
-			"before saving it to the OS credential store. This is a write operation; " +
-			"use only when the user has asked to log in.",
+		Long: "Authenticate with Bitbucket Cloud. API tokens prompt for the Atlassian " +
+			"account email; access and OAuth bearer tokens do not require one. Reads the " +
+			"token from stdin when --with-token is given and validates it before saving " +
+			"to the OS credential store. Access tokens are validated against the selected " +
+			"repository rather than /user. This is a write operation; use only when the " +
+			"user has asked to log in.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			email := strings.TrimSpace(flagLoginEmail)
@@ -51,11 +52,24 @@ func init() {
 			if path == "" {
 				return fail(fmt.Errorf("could not resolve a config file path"))
 			}
+			previous, err := config.LoadFileConfig(path)
+			if err != nil {
+				return fail(err)
+			}
+			oldKey, oldKeyErr := storedProfileKey(previous, path)
+			oldStored := false
+			if oldKeyErr == nil {
+				if _, getErr := auth.CurrentStore().Get(oldKey); getErr == nil {
+					oldStored = true
+				}
+			}
 
 			interactive := stdinIsTTY()
-			if email == "" {
+			// API tokens represent an Atlassian account and require an email.
+			// Resource-scoped access tokens and OAuth bearer tokens do not.
+			if tt == auth.TokenAPI && email == "" {
 				if !interactive {
-					return fail(fmt.Errorf("Provide --email when stdin is not a TTY."))
+					return fail(fmt.Errorf("Provide --email when stdin is not a TTY for an API token."))
 				}
 				email, err = prompt("Bitbucket account email: ")
 				if err != nil {
@@ -63,8 +77,8 @@ func init() {
 				}
 				email = strings.TrimSpace(email)
 			}
-			if email == "" {
-				return fail(fmt.Errorf("email is required"))
+			if tt == auth.TokenAPI && email == "" {
+				return fail(fmt.Errorf("email is required for an API token"))
 			}
 
 			var token string
@@ -88,33 +102,73 @@ func init() {
 				return fail(fmt.Errorf("token is required"))
 			}
 
-			// Validate before persisting anything.
-			if err := validateCredentials(cmd.Context(), auth.ProviderFor(tt, email, token)); err != nil {
-				return fail(err)
+			provider := auth.ProviderFor(tt, email, token)
+			if provider == nil {
+				return fail(fmt.Errorf("unsupported token type %q", tt))
 			}
 
-			if err := config.SetFileValue(path, "email", email); err != nil {
+			// Validate before persisting anything. Access tokens are resource
+			// credentials, so probe the selected repository instead of /user.
+			var validationErr error
+			if tt == auth.TokenAccess {
+				ref, err := loginValidationRepo(path)
+				if err != nil {
+					return fail(err)
+				}
+				validationErr = validateAccessCredentials(cmd.Context(), provider, ref)
+			} else {
+				validationErr = validateCredentials(cmd.Context(), provider)
+			}
+			if validationErr != nil {
+				return fail(validationErr)
+			}
+
+			// Store identity only for account credentials. Access/OAuth token
+			// profiles use a persisted, namespaced key and do not invent an
+			// account. Write the new secret before changing the profile file so a
+			// failed keychain write leaves the old profile usable.
+			next := previous
+			if tt == auth.TokenAPI {
+				next.Email = email
+				next.CredentialKey = ""
+			} else {
+				next.Email = ""
+				if strings.TrimSpace(next.CredentialKey) == "" {
+					next.CredentialKey = config.ProfileKey(path)
+				}
+			}
+			next.TokenType = string(tt)
+			next.APIToken = ""
+			storeKey, err := profileStoreKeyForLogin(tt, email, next.CredentialKey, path)
+			if err != nil {
 				return fail(err)
 			}
-			if err := config.SetFileValue(path, "token_type", string(tt)); err != nil {
+			if err := auth.CurrentStore().Set(storeKey, token); err != nil {
 				return fail(err)
 			}
-			// One-time cleanup of a legacy plaintext api_token (run before storing
-			// the new token so migration cannot overwrite it in the store).
-			if migrated, err := config.MigrateLegacyToken(path, auth.CurrentStore()); err != nil {
+			if err := config.WriteFileConfig(path, next); err != nil {
+				_ = auth.CurrentStore().Delete(storeKey)
 				return fail(err)
-			} else if migrated {
-				_, _ = fmt.Fprintln(os.Stderr, "Migrated legacy plaintext api_token to the credential store.")
 			}
-			if err := auth.CurrentStore().Set(email, token); err != nil {
-				return fail(err)
+			if oldStored && oldKey != storeKey {
+				if err := auth.CurrentStore().Delete(oldKey); err != nil {
+					// Roll back the profile and the newly written secret. The old
+					// credential remains the only active profile on failure.
+					_ = config.WriteFileConfig(path, previous)
+					_ = auth.CurrentStore().Delete(storeKey)
+					return fail(fmt.Errorf("remove previous credential: %w", err))
+				}
 			}
 
 			if flagPretty {
-				_, err := fmt.Fprintf(os.Stdout, "Logged in to Bitbucket as %s.\n", email)
+				if email != "" {
+					_, err := fmt.Fprintf(os.Stdout, "Logged in to Bitbucket as %s.\n", email)
+					return err
+				}
+				_, err := fmt.Fprintln(os.Stdout, "Logged in to Bitbucket.")
 				return err
 			}
-			return output.RenderJSON(os.Stdout, map[string]any{"authenticated": true, "account": email})
+			return output.RenderJSON(os.Stdout, map[string]any{"authenticated": true, "account": nullableString(email)})
 		},
 	}
 	loginCmd.Flags().StringVar(&flagLoginEmail, "email", "", "Atlassian account email")
@@ -157,12 +211,32 @@ func init() {
 			if email == "" {
 				email = strings.TrimSpace(os.Getenv("BITBUCKET_EMAIL"))
 			}
-			if email == "" && !flagLogoutYes {
+			tokenType := strings.TrimSpace(fc.TokenType)
+			if tokenType == "" {
+				tokenType = strings.TrimSpace(os.Getenv("BITBUCKET_TOKEN_TYPE"))
+			}
+			if tokenType == "" {
+				tokenType = string(auth.TokenAPI)
+			}
+			tt, err := parseTokenType(tokenType)
+			if err != nil {
+				return fail(err)
+			}
+			storeKey, keyErr := storedProfileKey(fc, path)
+			hasProfile := strings.TrimSpace(fc.Email) != "" || strings.TrimSpace(fc.TokenType) != ""
+			if keyErr != nil && hasProfile {
+				return fail(keyErr)
+			}
+			if !hasProfile && !flagLogoutYes {
 				return fail(fmt.Errorf("no stored profile to log out"))
 			}
 
+			label := email
+			if label == "" {
+				label = string(tt) + " credential"
+			}
 			if !flagLogoutYes && stdinIsTTY() {
-				confirm, cerr := prompt(fmt.Sprintf("Log out of Bitbucket as %s? [y/N] ", email))
+				confirm, cerr := prompt(fmt.Sprintf("Log out of Bitbucket as %s? [y/N] ", label))
 				if cerr != nil {
 					return fail(cerr)
 				}
@@ -177,8 +251,8 @@ func init() {
 				return fail(fmt.Errorf("stdin is not a TTY; pass --yes to log out"))
 			}
 
-			if email != "" {
-				if err := auth.CurrentStore().Delete(email); err != nil {
+			if keyErr == nil {
+				if err := auth.CurrentStore().Delete(storeKey); err != nil {
 					return fail(err)
 				}
 			}
@@ -191,6 +265,12 @@ func init() {
 			}
 			if strings.TrimSpace(fc.TokenType) != "" {
 				if err := config.SetFileValue(path, "token_type", ""); err != nil {
+					return fail(err)
+				}
+				changed = true
+			}
+			if strings.TrimSpace(fc.CredentialKey) != "" {
+				if err := config.SetFileValue(path, "credential_key", ""); err != nil {
 					return fail(err)
 				}
 				changed = true
@@ -211,7 +291,7 @@ func init() {
 				}())
 				return err
 			}
-			return output.RenderJSON(os.Stdout, map[string]any{"loggedOut": true, "account": email, "changed": changed})
+			return output.RenderJSON(os.Stdout, map[string]any{"loggedOut": true, "account": nullableString(email), "changed": changed})
 		},
 	}
 	logoutCmd.Flags().BoolVar(&flagLogoutYes, "yes", false, "Skip confirmation (required when stdin is not a TTY)")
@@ -246,6 +326,37 @@ var (
 	flagStatusJSON     bool
 	flagLogoutYes      bool
 )
+
+// storedProfileKey returns the key used by a persisted profile. Profiles
+// written before credential_key was introduced use the legacy bearer key.
+func storedProfileKey(fc config.FileConfig, path string) (string, error) {
+	tokenType := strings.TrimSpace(fc.TokenType)
+	if tokenType == "" {
+		tokenType = string(auth.TokenAPI)
+	}
+	tt, err := parseTokenType(tokenType)
+	if err != nil {
+		return "", err
+	}
+	email := strings.TrimSpace(fc.Email)
+	if tt == auth.TokenAPI {
+		return config.CredentialStoreKey(tt, email)
+	}
+	if key := strings.TrimSpace(fc.CredentialKey); key != "" {
+		return config.CredentialStoreKeyForProfile(tt, email, key)
+	}
+	return config.CredentialStoreKey(tt, email)
+}
+
+func profileStoreKeyForLogin(tokenType auth.TokenType, email, profileKey, path string) (string, error) {
+	if tokenType == auth.TokenAPI {
+		return config.CredentialStoreKey(tokenType, email)
+	}
+	if strings.TrimSpace(profileKey) == "" {
+		profileKey = config.ProfileKey(path)
+	}
+	return config.CredentialStoreKeyForProfile(tokenType, email, profileKey)
+}
 
 // parseTokenType validates --token-type against the supported values.
 func parseTokenType(s string) (auth.TokenType, error) {
@@ -283,7 +394,8 @@ func prompt(p string) (string, error) {
 	return line, nil
 }
 
-// validateCredentials checks a provider against GET /2.0/user.
+// validateCredentials checks account credentials against GET /2.0/user.
+// Access-token validation is deliberately handled by validateAccessCredentials.
 func validateCredentials(ctx context.Context, p auth.Provider) error {
 	client := newAuthClient(p)
 	var user struct {
@@ -296,6 +408,42 @@ func validateCredentials(ctx context.Context, p auth.Provider) error {
 		return fmt.Errorf("Bitbucket accepted the credential but returned no account ID")
 	}
 	return nil
+}
+
+// loginValidationRepo resolves an access-token probe target without requiring
+// credentials to be loaded from the config first.
+func loginValidationRepo(path string) (config.ResolvedRepoRef, error) {
+	fc, err := config.LoadFileConfig(path)
+	if err != nil {
+		return config.ResolvedRepoRef{}, err
+	}
+	env := envMap()
+	cfg := config.Config{
+		DefaultWorkspace: strings.TrimSpace(env["BITBUCKET_DEFAULT_WORKSPACE"]),
+		DefaultRepo:      strings.TrimSpace(env["BITBUCKET_DEFAULT_REPO"]),
+	}
+	if cfg.DefaultWorkspace == "" {
+		cfg.DefaultWorkspace = strings.TrimSpace(fc.DefaultWorkspace)
+	}
+	if cfg.DefaultRepo == "" {
+		cfg.DefaultRepo = strings.TrimSpace(fc.DefaultRepo)
+	}
+	ref, _, err := resolveRepo(cfg)
+	if err != nil {
+		return config.ResolvedRepoRef{}, fmt.Errorf("Access-token validation requires a repository context; pass -R workspace/repo or run inside a Bitbucket repository.")
+	}
+	return ref, nil
+}
+
+// validateAccessCredentials probes a concrete repository, which works for
+// repository-, project-, and workspace-scoped access tokens without inventing
+// an Atlassian user identity.
+func validateAccessCredentials(ctx context.Context, p auth.Provider, ref config.ResolvedRepoRef) error {
+	client := newAuthClient(p)
+	path := fmt.Sprintf("/repositories/%s/%s",
+		bitbucket.EncodePathSegment(ref.Workspace),
+		bitbucket.EncodePathSegment(ref.RepoSlug))
+	return client.Request(ctx, path, bitbucket.RequestOptions{}, nil)
 }
 
 // newAuthClient builds a client with the test transport when injected.
@@ -316,7 +464,10 @@ func runAuthStatus(ctx context.Context) error {
 
 	email := ""
 	if loadErr == nil {
-		email = cfg.Email
+		// Resource-scoped credentials do not have an Atlassian account identity.
+		if cfg.TokenType != string(auth.TokenAccess) {
+			email = cfg.Email
+		}
 	} else {
 		fc, _ := config.LoadFileConfig(path)
 		email = strings.TrimSpace(fc.Email)
@@ -334,16 +485,19 @@ func runAuthStatus(ctx context.Context) error {
 		}
 	}
 
-	// Probe /user and the resolved repo read-only, best effort.
+	// Probe account credentials at /user and resource credentials at the
+	// resolved repository. Both probes are read-only and best effort.
 	user := map[string]any{}
 	repoAccess := any(nil)
 	if loggedIn {
 		client := newAuthClient(cfg.Auth)
-		var u map[string]any
-		if err := client.Request(ctx, "/user", bitbucket.RequestOptions{}, &u); err == nil {
-			user = u
-		} else {
-			user = map[string]any{"error": redactString(err.Error(), cfg.APIToken)}
+		if cfg.TokenType != string(auth.TokenAccess) {
+			var u map[string]any
+			if err := client.Request(ctx, "/user", bitbucket.RequestOptions{}, &u); err == nil {
+				user = u
+			} else {
+				user = map[string]any{"error": redactString(err.Error(), cfg.APIToken)}
+			}
 		}
 		if cfg.DefaultWorkspace != "" && cfg.DefaultRepo != "" {
 			repoPath := fmt.Sprintf("/repositories/%s/%s",
@@ -392,11 +546,16 @@ func runAuthStatus(ctx context.Context) error {
 			_, err := fmt.Fprintln(os.Stdout, "Not logged in to Bitbucket.")
 			return err
 		}
-		lines := []string{
-			fmt.Sprintf("Logged in to Bitbucket as %s", displayName),
+		lines := []string{}
+		if displayName != "" {
+			lines = append(lines, fmt.Sprintf("Logged in to Bitbucket as %s", displayName))
+		} else {
+			lines = append(lines, "Logged in to Bitbucket")
+		}
+		lines = append(lines,
 			fmt.Sprintf("Credential source: %s", source),
 			fmt.Sprintf("Token type: %s", tokenType),
-		}
+		)
 		if defaultRepo != "" {
 			lines = append(lines, fmt.Sprintf("Default repo: %s", defaultRepo))
 		}
@@ -418,8 +577,9 @@ func redactString(s, secret string) string {
 	return auth.Redact(s, secret)
 }
 
-// envSet reports whether credential environment variables are present.
+// envSet reports whether the active credential resolves from environment
+// variables. Bearer credentials intentionally do not require an email.
 func envSet() bool {
-	return strings.TrimSpace(os.Getenv("BITBUCKET_EMAIL")) != "" &&
-		strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN")) != ""
+	cfg, err := loadConfig()
+	return err == nil && cfg.CredentialSource == config.SourceEnv
 }

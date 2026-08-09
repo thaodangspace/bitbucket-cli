@@ -146,8 +146,129 @@ func TestAuthLoginAccessTokenType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fc.TokenType != "access" {
-		t.Fatalf("token_type not saved: %+v", fc)
+	if fc.TokenType != "access" || fc.Email != "" {
+		t.Fatalf("access token must not persist an account identity: %+v", fc)
+	}
+	accessKey := config.ProfileKey(cfgPath) + ":access"
+	if got, err := mustStore(t).Get(accessKey); err != nil || got != "acc-tok" {
+		t.Fatalf("access token not stored under resource key: %q err=%v", got, err)
+	}
+}
+
+func TestAuthLoginAccessTokenWithoutEmailUsesBearerRepoProbe(t *testing.T) {
+	cfgPath := t.TempDir() + "/cfg.yaml"
+	var paths []string
+	var authHeader string
+	withStdin(t, "access-secret\n", func() {
+		_, err := runAt(t, func(r *http.Request) (*http.Response, error) {
+			paths = append(paths, r.URL.Path)
+			authHeader = r.Header.Get("Authorization")
+			if strings.HasSuffix(r.URL.Path, "/user") {
+				return jsonResp(500, `{"error":{"message":"must not probe user"}}`), nil
+			}
+			return jsonResp(200, `{}`), nil
+		}, cfgPath, "auth", "login", "--with-token", "--token-type", "access")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if authHeader != "Bearer access-secret" {
+		t.Fatalf("authorization = %q", authHeader)
+	}
+	if len(paths) != 1 || !strings.HasSuffix(paths[0], "/repositories/team/repo") {
+		t.Fatalf("unexpected validation paths: %v", paths)
+	}
+}
+
+func TestEnvSetBearerCredentialsWithoutEmail(t *testing.T) {
+	t.Setenv("BITBUCKET_API_TOKEN", "bearer-secret")
+	t.Setenv("BITBUCKET_EMAIL", "")
+	t.Setenv("BITBUCKET_CONFIG", filepath.Join(t.TempDir(), "profile.yaml"))
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "access")
+	if !envSet() {
+		t.Fatal("access-token environment credentials were not detected")
+	}
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "oauth")
+	if !envSet() {
+		t.Fatal("OAuth environment credentials were not detected")
+	}
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "api")
+	if envSet() {
+		t.Fatal("API environment credentials without email were detected")
+	}
+}
+
+func TestAuthStatusAccessTokenSkipsUserProbe(t *testing.T) {
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "access")
+	var paths []string
+	_, err := run(t, func(r *http.Request) (*http.Response, error) {
+		paths = append(paths, r.URL.Path)
+		return jsonResp(200, `{}`), nil
+	}, "auth", "status")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(paths) != 1 || strings.HasSuffix(paths[0], "/user") {
+		t.Fatalf("unexpected status paths: %v", paths)
+	}
+}
+
+func TestAuthSwitchAPIToAccessCleansOldSecretAndLogout(t *testing.T) {
+	store := auth.NewMemoryStore()
+	cfgPath := filepath.Join(t.TempDir(), "profile.yaml")
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "")
+	withStdin(t, "api-secret\n", func() {
+		if _, err := runAtStore(t, store, authUserTransport("acct-switch"), cfgPath,
+			"auth", "login", "--email", "dev@example.com", "--with-token"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	withStdin(t, "access-secret\n", func() {
+		if _, err := runAtStore(t, store, func(r *http.Request) (*http.Response, error) {
+			return jsonResp(200, `{}`), nil
+		}, cfgPath, "auth", "login", "--with-token", "--token-type", "access"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, err := store.Get("dev@example.com"); err == nil {
+		t.Fatal("API secret remained after switching token type")
+	}
+	accessKey := config.ProfileKey(cfgPath) + ":access"
+	if got, err := store.Get(accessKey); err != nil || got != "access-secret" {
+		t.Fatalf("access secret missing after switch: %q %v", got, err)
+	}
+	if _, err := runAtStore(t, store, nil, cfgPath, "auth", "logout", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(accessKey); err == nil {
+		t.Fatal("access secret remained after logout")
+	}
+}
+
+func TestAuthSwitchAccessToOAuthCleansOldSecret(t *testing.T) {
+	store := auth.NewMemoryStore()
+	cfgPath := filepath.Join(t.TempDir(), "profile.yaml")
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "")
+	withStdin(t, "access-secret\n", func() {
+		if _, err := runAtStore(t, store, func(r *http.Request) (*http.Response, error) {
+			return jsonResp(200, `{}`), nil
+		}, cfgPath, "auth", "login", "--with-token", "--token-type", "access"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	withStdin(t, "oauth-secret\n", func() {
+		if _, err := runAtStore(t, store, authUserTransport("oauth-acct"), cfgPath,
+			"auth", "login", "--with-token", "--token-type", "oauth"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	accessKey := config.ProfileKey(cfgPath) + ":access"
+	oauthKey := config.ProfileKey(cfgPath) + ":oauth"
+	if _, err := store.Get(accessKey); err == nil {
+		t.Fatal("access secret remained after switching to OAuth")
+	}
+	if got, err := store.Get(oauthKey); err != nil || got != "oauth-secret" {
+		t.Fatalf("OAuth secret missing after switch: %q %v", got, err)
 	}
 }
 
@@ -378,6 +499,28 @@ func TestClientRedactsTokenInErrors(t *testing.T) {
 	}
 }
 
+func TestAccessTokenRedactsReflectedSecret(t *testing.T) {
+	testTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResp(400, `{"message":"access-secret"}`), nil
+	})
+	t.Cleanup(func() { testTransport = nil })
+	c := bitbucket.NewClient(
+		auth.ProviderFor(auth.TokenAccess, "", "access-secret"),
+		bitbucket.WithHTTPClient(&http.Client{Transport: testTransport}),
+	)
+	err := c.Request(context.Background(), "/repositories/team/repo?token=access-secret", bitbucket.RequestOptions{}, nil)
+	he, ok := err.(*bitbucket.HTTPError)
+	if !ok {
+		t.Fatalf("expected HTTPError, got %T: %v", err, err)
+	}
+	if strings.Contains(he.URL, "access-secret") || strings.Contains(he.Excerpt, "access-secret") {
+		t.Fatalf("access token leaked: %+v", he)
+	}
+	if !strings.Contains(he.URL, "<redacted>") || !strings.Contains(he.Excerpt, "<redacted>") {
+		t.Fatalf("access token was not redacted: %+v", he)
+	}
+}
+
 func TestClientBasicAndBearerHeaders(t *testing.T) {
 	cases := []struct {
 		name string
@@ -385,7 +528,7 @@ func TestClientBasicAndBearerHeaders(t *testing.T) {
 		want string
 	}{
 		{"api", auth.TokenAPI, "Basic ZGV2QGV4YW1wbGUuY29tOnRva3M="},
-		{"access", auth.TokenAccess, "Basic dG9rczp4LXRva2VuLWF1dGg="},
+		{"access", auth.TokenAccess, "Bearer toks"},
 		{"oauth", auth.TokenOAuth, "Bearer toks"},
 	}
 	for _, tc := range cases {

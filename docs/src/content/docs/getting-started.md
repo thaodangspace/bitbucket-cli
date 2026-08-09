@@ -6,7 +6,8 @@ description: Install bitbucket-cli, configure credentials, and inspect a reposit
 ## Requirements
 
 - Go, if installing or building from source
-- An Atlassian API token and the email address associated with it
+- An Atlassian API token and the email address associated with it, or a
+  Bitbucket access/OAuth bearer token
 - Bitbucket Cloud access to the target workspace and repository
 
 Create an API token under [Bitbucket account settings](https://support.atlassian.com/bitbucket-cloud/docs/api-tokens/).
@@ -35,9 +36,9 @@ bitbucket-cli --version
 
 ## Configure credentials
 
-The recommended workflow is `auth login`, which prompts for your Atlassian
-account email and token, validates them against Bitbucket, and stores the token
-in the OS credential store (macOS Keychain) instead of plaintext:
+The recommended workflow is `auth login`, which prompts for an Atlassian
+account email for API tokens, validates the credential against Bitbucket, and
+stores the token in the OS credential store (macOS Keychain) instead of plaintext:
 
 ```sh
 bitbucket-cli auth login
@@ -50,11 +51,14 @@ For scripting and CI, read the token from stdin without interactive prompts
 echo "your-atlassian-api-token" | bitbucket-cli auth login --email you@example.com --with-token
 ```
 
-`auth login` also supports `--token-type api|access|oauth` for Bitbucket access
-tokens and OAuth bearer tokens. Verify state with `bitbucket-cli auth status` and
-sign out with `bitbucket-cli auth logout`. The token is never echoed by these
-commands; `bitbucket-cli auth token` prints it explicitly for scripts that need
-to build their own headers.
+`auth login` also supports `--token-type api|access|oauth`. API tokens use Basic
+authentication; access and OAuth tokens use `Authorization: Bearer`. Access-token
+login does not require an email and validates against the selected/default
+repository, which can be supplied with `-R workspace/repo` or resolved from a
+Bitbucket git remote. Verify state with `bitbucket-cli auth status` and sign out
+with `bitbucket-cli auth logout`. The token is never echoed by these commands;
+`bitbucket-cli auth token` prints it explicitly for scripts that need to build
+their own headers.
 
 ### Environment variables (non-interactive override)
 
@@ -71,8 +75,9 @@ export BITBUCKET_DEFAULT_REPO="repository-slug"
 ### Config file
 
 `~/.config/bitbucket-cli.yaml` holds non-secret profile data (email, token type,
-defaults). A legacy plaintext `api_token` is still accepted but `auth login`
-migrates it to the credential store and removes it from the file:
+defaults, and a profile-specific bearer `credential_key`). A legacy plaintext
+`api_token` is still accepted but `auth login` migrates it to the credential
+store and removes it from the file:
 
 ```yaml
 email: you@example.com

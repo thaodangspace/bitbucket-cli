@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thaodangspace/bitbucket-cli/auth"
 )
 
 func writeConfigFile(t *testing.T, contents string) string {
@@ -168,6 +170,92 @@ func TestLoadConfigMissingCredentials(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestAccessTokenLoadsFromKeychainWithoutEmail(t *testing.T) {
+	store := auth.NewMemoryStore()
+	if err := store.Set("access-token", "resource-secret"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(map[string]string{
+		"BITBUCKET_TOKEN_TYPE":        "access",
+		"BITBUCKET_DEFAULT_WORKSPACE": "team",
+		"BITBUCKET_DEFAULT_REPO":      "repo",
+	}, t.TempDir(), "", WithSecretStore(store))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Email != "" || cfg.APIToken != "resource-secret" || cfg.TokenType != "access" {
+		t.Fatalf("unexpected access config: %+v", cfg)
+	}
+	if cfg.Auth.Kind() != "access" {
+		t.Fatalf("auth kind = %q", cfg.Auth.Kind())
+	}
+}
+
+func TestProfiledBearerCredentialsDoNotCollide(t *testing.T) {
+	store := auth.NewMemoryStore()
+	pathA := filepath.Join(t.TempDir(), "repo-a.yaml")
+	pathB := filepath.Join(t.TempDir(), "repo-b.yaml")
+	keyA, err := CredentialStoreKeyForProfile(auth.TokenAccess, "", ProfileKey(pathA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyB, err := CredentialStoreKeyForProfile(auth.TokenAccess, "", ProfileKey(pathB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if keyA == keyB {
+		t.Fatal("profiled access-token keys collided")
+	}
+	if err := store.Set(keyA, "token-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(keyB, "token-b"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{pathA, "token-a"},
+		{pathB, "token-b"},
+	} {
+		if err := SetFileValue(tc.path, "token_type", "access"); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadConfig(map[string]string{}, t.TempDir(), tc.path, WithSecretStore(store))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.APIToken != tc.want {
+			t.Fatalf("%s resolved %q, want %q", tc.path, cfg.APIToken, tc.want)
+		}
+	}
+}
+
+func TestCredentialStoreKeyCompatibility(t *testing.T) {
+	cases := []struct {
+		tokenType auth.TokenType
+		email     string
+		want      string
+	}{
+		{auth.TokenAPI, "dev@example.com", "dev@example.com"},
+		{auth.TokenAccess, "", "access-token"},
+		{auth.TokenOAuth, "", "oauth-token"},
+	}
+	for _, tc := range cases {
+		got, err := CredentialStoreKey(tc.tokenType, tc.email)
+		if err != nil || got != tc.want {
+			t.Fatalf("CredentialStoreKey(%q, %q) = %q, %v", tc.tokenType, tc.email, got, err)
+		}
+	}
+	if _, err := CredentialStoreKey(auth.TokenAPI, ""); err == nil {
+		t.Fatal("API token key should require email")
+	}
+	if _, err := CredentialStoreKey(auth.TokenType("unknown"), "x"); err == nil {
+		t.Fatal("unknown token type should fail")
 	}
 }
 

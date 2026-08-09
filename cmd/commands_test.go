@@ -52,6 +52,11 @@ func run(t *testing.T, transport roundTripFunc, args ...string) (string, error) 
 // inspect or pre-populate a specific config file.
 func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string) (string, error) {
 	t.Helper()
+	return runAtStore(t, auth.NewMemoryStore(), transport, cfgPath, args...)
+}
+
+func runAtStore(t *testing.T, store auth.SecretStore, transport roundTripFunc, cfgPath string, args ...string) (string, error) {
+	t.Helper()
 
 	t.Setenv("BITBUCKET_EMAIL", "dev@example.com")
 	t.Setenv("BITBUCKET_API_TOKEN", "token")
@@ -60,7 +65,7 @@ func runAt(t *testing.T, transport roundTripFunc, cfgPath string, args ...string
 	// Never read the developer's real config or keychain in tests.
 	t.Setenv("BITBUCKET_CONFIG", cfgPath)
 	t.Setenv("BITBUCKET_CACHE_DIR", t.TempDir())
-	auth.SetGlobalStore(auth.NewMemoryStore())
+	auth.SetGlobalStore(store)
 	t.Cleanup(func() { auth.SetGlobalStore(nil) })
 
 	// Reset global flag state between runs.
