@@ -275,6 +275,8 @@ func pipelineRaw(cmd *cobra.Command, client *bitbucket.Client, path, outputFile 
 	var previous string
 	var complete []byte
 	for {
+		// Follow polls complete snapshots; each individual request remains
+		// bounded even though the outer loop may run indefinitely.
 		response, err := client.Do(ctx(cmd), path, bitbucket.RequestOptions{})
 		if err != nil {
 			return fail(err)

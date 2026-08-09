@@ -38,6 +38,7 @@ var (
 	apiSlurp    bool
 	apiInclude  bool
 	apiSilent   bool
+	apiStream   bool
 	apiOutput   string
 	apiJQ       string
 	apiTemplate string
@@ -67,6 +68,7 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiSlurp, "slurp", false, "With --paginate, apply --jq/--template to the accumulated array instead of each item")
 	apiCmd.Flags().BoolVarP(&apiInclude, "include", "i", false, "Include response status and headers before the body")
 	apiCmd.Flags().BoolVar(&apiSilent, "silent", false, "Suppress the response body")
+	apiCmd.Flags().BoolVar(&apiStream, "stream", false, "Allow the response body to remain open beyond the ordinary request timeout")
 	apiCmd.Flags().StringVarP(&apiOutput, "output", "o", "", "Write the raw response body to a file instead of stdout")
 	apiCmd.Flags().StringVarP(&apiJQ, "jq", "q", "", "Apply a jq expression to JSON output (supports .foo, .foo.bar, [<index>], [])")
 	apiCmd.Flags().StringVarP(&apiTemplate, "template", "t", "", "Format JSON output with a Go template (adds 'json' and 'pretty' helpers)")
@@ -134,7 +136,7 @@ func runAPI(cmd *cobra.Command, args []string) error {
 	}
 
 	sendInBody := isBodyMethod(method) && apiInput == ""
-	opts := bitbucket.RequestOptions{Method: method, Headers: headers}
+	opts := bitbucket.RequestOptions{Method: method, Headers: headers, Streaming: apiStream}
 	if sendInBody {
 		if len(fields) > 0 {
 			body, berr := buildFieldBody(fields)
