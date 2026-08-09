@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thaodangspace/bitbucket-cli/auth"
 )
@@ -72,6 +73,44 @@ func TestLoadConfigMissingFileIsNotAnError(t *testing.T) {
 	}
 	if cfg.Email != "dev@example.com" {
 		t.Fatalf("got %+v", cfg)
+	}
+}
+
+func TestHTTPTimeoutConfiguration(t *testing.T) {
+	path := writeConfigFile(t, `http_timeout: 45s
+`)
+	cfg, err := LoadConfig(map[string]string{
+		"BITBUCKET_EMAIL":        "dev@example.com",
+		"BITBUCKET_API_TOKEN":    "token",
+		"BITBUCKET_HTTP_TIMEOUT": "2s",
+	}, t.TempDir(), path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HTTPTimeout != 2*time.Second || !cfg.HTTPTimeoutSet {
+		t.Fatalf("timeout = %v, set=%v", cfg.HTTPTimeout, cfg.HTTPTimeoutSet)
+	}
+
+	cfg, err = LoadConfig(map[string]string{
+		"BITBUCKET_EMAIL":     "dev@example.com",
+		"BITBUCKET_API_TOKEN": "token",
+	}, t.TempDir(), path)
+	if err != nil {
+		t.Fatalf("file timeout error: %v", err)
+	}
+	if cfg.HTTPTimeout != 45*time.Second || !cfg.HTTPTimeoutSet {
+		t.Fatalf("file timeout = %v, set=%v", cfg.HTTPTimeout, cfg.HTTPTimeoutSet)
+	}
+}
+
+func TestInvalidHTTPTimeoutConfiguration(t *testing.T) {
+	_, err := LoadConfig(map[string]string{
+		"BITBUCKET_EMAIL":        "dev@example.com",
+		"BITBUCKET_API_TOKEN":    "token",
+		"BITBUCKET_HTTP_TIMEOUT": "not-a-duration",
+	}, t.TempDir(), "")
+	if err == nil || !strings.Contains(err.Error(), "invalid HTTP timeout") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

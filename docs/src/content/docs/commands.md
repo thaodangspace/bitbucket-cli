@@ -266,6 +266,7 @@ Flags:
   unless `--slurp` is set. `--max-pages N` bounds traversal; `0` is unlimited.
 - `-i, --include` — print the response status and headers before the body.
 - `--silent` — discard the response body.
+- `--stream` — disable the ordinary total request timeout for a long-lived response; transport connection and response-header limits still apply.
 - `-o, --output FILE` — write the raw response body to a file (no excerpt
   truncation).
 - `-q, --jq EXPR` — filter JSON output using jq syntax (gojq).

@@ -70,6 +70,7 @@ export BITBUCKET_EMAIL="you@example.com"
 export BITBUCKET_API_TOKEN="your-atlassian-api-token"
 export BITBUCKET_DEFAULT_WORKSPACE="workspace-slug"
 export BITBUCKET_DEFAULT_REPO="repository-slug"
+export BITBUCKET_HTTP_TIMEOUT="30s" # optional; use 0 to disable total request timeout
 ```
 
 ### Config file
@@ -83,6 +84,7 @@ store and removes it from the file:
 email: you@example.com
 default_workspace: workspace-slug
 default_repo: repository-slug
+http_timeout: 30s # optional; use 0 to disable total request timeout
 ```
 
 Environment variables take precedence over the config file. When workspace and

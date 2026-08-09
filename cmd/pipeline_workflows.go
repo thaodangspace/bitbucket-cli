@@ -275,7 +275,7 @@ func pipelineRaw(cmd *cobra.Command, client *bitbucket.Client, path, outputFile 
 	var previous string
 	var complete []byte
 	for {
-		response, err := client.Do(ctx(cmd), path, bitbucket.RequestOptions{})
+		response, err := client.Do(ctx(cmd), path, bitbucket.RequestOptions{Streaming: true})
 		if err != nil {
 			return fail(err)
 		}

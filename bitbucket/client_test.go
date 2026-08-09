@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thaodangspace/bitbucket-cli/auth"
 )
@@ -508,5 +509,125 @@ func TestNoRetryOnNonIdempotent(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("POST must not be retried, calls=%d", calls)
+	}
+}
+
+func TestDoAppliesOverallRequestTimeout(t *testing.T) {
+	calls := 0
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		})}),
+		WithRequestTimeout(20*time.Millisecond),
+	)
+
+	_, err := c.Do(context.Background(), "/stalled", RequestOptions{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want deadline exceeded", err)
+	}
+	if calls != 1 {
+		t.Fatalf("timed out request should not start another retry, calls=%d", calls)
+	}
+}
+
+func TestDoRespectsCallerDeadline(t *testing.T) {
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		})}),
+		WithRequestTimeout(time.Second),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := c.Do(ctx, "/stalled", RequestOptions{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want caller deadline exceeded", err)
+	}
+}
+
+func TestDoRetryBackoffHonorsOverallTimeout(t *testing.T) {
+	calls := 0
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return jsonResponse(http.StatusServiceUnavailable, `{}`), nil
+		})}),
+		WithRequestTimeout(20*time.Millisecond),
+	)
+
+	_, err := c.Do(context.Background(), "/retry", RequestOptions{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want deadline exceeded", err)
+	}
+	if calls != 1 {
+		t.Fatalf("retry should be blocked by overall deadline, calls=%d", calls)
+	}
+}
+
+func TestStreamingDoIgnoresOrdinaryRequestTimeout(t *testing.T) {
+	c := NewClient(nil,
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       contextReadCloser{ctx: r.Context()},
+			}, nil
+		})}),
+		WithRequestTimeout(10*time.Millisecond),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := c.Do(ctx, "/stream", RequestOptions{Streaming: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := io.ReadAll(resp.Body)
+		readDone <- err
+	}()
+	select {
+	case err := <-readDone:
+		t.Fatalf("stream ended under ordinary timeout: %v", err)
+	case <-time.After(40 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-readDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("stream error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stream body did not observe cancellation")
+	}
+}
+
+type contextReadCloser struct {
+	ctx context.Context
+}
+
+func (b contextReadCloser) Read([]byte) (int, error) {
+	<-b.ctx.Done()
+	return 0, b.ctx.Err()
+}
+
+func (contextReadCloser) Close() error { return nil }
+
+func TestNewClientConfiguresTransportSafety(t *testing.T) {
+	c := NewClient(nil)
+	transport, ok := c.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", c.http.Transport)
+	}
+	if transport.TLSHandshakeTimeout != DefaultTLSHandshakeTimeout ||
+		transport.ResponseHeaderTimeout != DefaultResponseHeaderTimeout ||
+		transport.IdleConnTimeout != DefaultIdleConnTimeout ||
+		transport.ExpectContinueTimeout != DefaultExpectContinueTimeout {
+		t.Fatalf("unexpected transport timeouts: %+v", transport)
 	}
 }

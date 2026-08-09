@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/thaodangspace/bitbucket-cli/auth"
 	"gopkg.in/yaml.v3"
@@ -39,6 +40,8 @@ type Config struct {
 	DefaultWorkspace string
 	DefaultRepo      string
 	CloneProtocol    string
+	HTTPTimeout      time.Duration
+	HTTPTimeoutSet   bool
 }
 
 // RepoRef is an unresolved workspace/repo reference, typically from CLI flags.
@@ -65,10 +68,11 @@ type FileConfig struct {
 	DefaultWorkspace string `yaml:"default_workspace,omitempty"`
 	DefaultRepo      string `yaml:"default_repo,omitempty"`
 	CloneProtocol    string `yaml:"clone_protocol,omitempty"`
+	HTTPTimeout      string `yaml:"http_timeout,omitempty"`
 }
 
 // FileKeys are the keys settable in the config file, in display order.
-var FileKeys = []string{"email", "token_type", "credential_key", "api_token", "default_workspace", "default_repo", "clone_protocol"}
+var FileKeys = []string{"email", "token_type", "credential_key", "api_token", "default_workspace", "default_repo", "clone_protocol", "http_timeout"}
 
 func (fc *FileConfig) field(key string) (*string, error) {
 	switch key {
@@ -86,6 +90,8 @@ func (fc *FileConfig) field(key string) (*string, error) {
 		return &fc.DefaultRepo, nil
 	case "clone_protocol":
 		return &fc.CloneProtocol, nil
+	case "http_timeout":
+		return &fc.HTTPTimeout, nil
 	default:
 		return nil, fmt.Errorf("unknown config key %q (valid keys: %s)", key, strings.Join(FileKeys, ", "))
 	}
@@ -192,6 +198,18 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func resolveHTTPTimeout(env map[string]string, file FileConfig) (time.Duration, bool, error) {
+	raw := firstNonEmpty(env["BITBUCKET_HTTP_TIMEOUT"], file.HTTPTimeout)
+	if raw == "" {
+		return 0, false, nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration < 0 {
+		return 0, false, fmt.Errorf("invalid HTTP timeout %q (use a non-negative duration such as 30s, or 0 to disable)", raw)
+	}
+	return duration, true, nil
 }
 
 // CredentialStoreKey returns the non-secret profile key used for a token type.
@@ -328,6 +346,10 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 	if err != nil {
 		return Config{}, err
 	}
+	httpTimeout, httpTimeoutSet, err := resolveHTTPTimeout(env, file)
+	if err != nil {
+		return Config{}, err
+	}
 
 	email := firstNonEmpty(env["BITBUCKET_EMAIL"], file.Email)
 	tokenType := firstNonEmpty(env["BITBUCKET_TOKEN_TYPE"], file.TokenType)
@@ -386,6 +408,8 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 		DefaultWorkspace: workspace,
 		DefaultRepo:      repo,
 		CloneProtocol:    cloneProtocol,
+		HTTPTimeout:      httpTimeout,
+		HTTPTimeoutSet:   httpTimeoutSet,
 	}, nil
 }
 

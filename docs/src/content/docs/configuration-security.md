@@ -120,7 +120,11 @@ authorization guidance without a guessed credential-specific scope.
 ## CI and automation
 
 Environment variables remain the highest-precedence, non-interactive override
-and require no keychain access:
+and require no keychain access. `BITBUCKET_HTTP_TIMEOUT` (or the config-file
+`http_timeout` key) sets the ordinary request deadline, defaulting to 30 seconds;
+use a duration such as `2m` or an explicit `0` to disable the total deadline.
+Streaming requests, including pipeline log follow, ignore this total deadline
+but retain transport connection and response-header protections.
 
 ```sh
 BITBUCKET_EMAIL=you@example.com \

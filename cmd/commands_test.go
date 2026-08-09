@@ -78,7 +78,7 @@ func runAtStore(t *testing.T, store auth.SecretStore, transport roundTripFunc, c
 	apiMethod = ""
 	apiHeaders, apiRawField, apiField = nil, nil, nil
 	apiInput, apiOutput, apiJQ, apiTemplate, apiCache = "", "", "", "", ""
-	apiPaginate, apiSlurp, apiInclude, apiSilent = false, false, false, false
+	apiPaginate, apiSlurp, apiInclude, apiSilent, apiStream = false, false, false, false, false
 	apiMaxPages = bitbucket.DefaultMaxPages
 	apiCacheStore.m = map[string]apiCacheEntry{}
 	testTransport = transport

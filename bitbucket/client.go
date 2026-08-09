@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,6 +30,18 @@ const (
 	DefaultLimit    = 20
 	DefaultPageLen  = 50
 	DefaultMaxPages = 10
+)
+
+// Request and transport defaults prevent stalled connections from hanging
+// ordinary CLI operations forever. Streaming requests use the transport
+// phase limits but do not use DefaultRequestTimeout as a total lifetime.
+const (
+	DefaultRequestTimeout        = 30 * time.Second
+	DefaultDialTimeout           = 10 * time.Second
+	DefaultTLSHandshakeTimeout   = 10 * time.Second
+	DefaultResponseHeaderTimeout = 30 * time.Second
+	DefaultIdleConnTimeout       = 90 * time.Second
+	DefaultExpectContinueTimeout = 1 * time.Second
 )
 
 // excerptLimit bounds how much of an error response body is surfaced.
@@ -277,8 +290,9 @@ func EncodePathSegment(value string) string {
 
 // Client talks to the Bitbucket Cloud API using an auth.Provider.
 type Client struct {
-	auth auth.Provider
-	http *http.Client
+	auth           auth.Provider
+	http           *http.Client
+	requestTimeout time.Duration
 }
 
 // Option customizes a Client.
@@ -289,14 +303,22 @@ func WithHTTPClient(h *http.Client) Option {
 	return func(c *Client) { c.http = h }
 }
 
-// WithTimeout sets the HTTP client's total request timeout. A non-positive
-// duration leaves the existing timeout unchanged.
-func WithTimeout(timeout time.Duration) Option {
+// WithRequestTimeout sets the total timeout for ordinary requests. A zero
+// duration explicitly disables the ordinary total timeout; transport phase
+// timeouts still apply. Streaming requests ignore this value.
+func WithRequestTimeout(timeout time.Duration) Option {
 	return func(c *Client) {
-		if timeout > 0 && c.http != nil {
-			c.http.Timeout = timeout
+		if timeout >= 0 {
+			c.requestTimeout = timeout
 		}
 	}
+}
+
+// WithTimeout is retained for compatibility and is an alias for
+// WithRequestTimeout. It no longer sets http.Client.Timeout so that streaming
+// requests can remain open beyond the ordinary request lifetime.
+func WithTimeout(timeout time.Duration) Option {
+	return WithRequestTimeout(timeout)
 }
 
 // WithAuth injects the credential provider to use for requests. Defaults to
@@ -308,10 +330,14 @@ func WithAuth(a auth.Provider) Option {
 // NewClient builds a Client using the given auth provider.
 func NewClient(a auth.Provider, opts ...Option) *Client {
 	httpClient := *http.DefaultClient
-	c := &Client{auth: a, http: &httpClient}
+	c := &Client{auth: a, http: &httpClient, requestTimeout: DefaultRequestTimeout}
 	for _, opt := range opts {
 		opt(c)
 	}
+	// Total request lifetime is controlled per request via context so
+	// streaming responses are not cut off by http.Client.Timeout.
+	c.http.Timeout = 0
+	configureTransport(c.http)
 	if c.http.CheckRedirect == nil {
 		c.http.CheckRedirect = safeRedirect
 	}
@@ -327,6 +353,9 @@ func NewClient(a auth.Provider, opts ...Option) *Client {
 // RequestOptions configures a single request.
 type RequestOptions struct {
 	Method string
+	// Streaming disables the ordinary total request timeout. Transport
+	// connection and response-header protections still apply.
+	Streaming bool
 	// Body is JSON-encoded into the request body. It must not be set together
 	// with RawBody.
 	Body any
@@ -447,6 +476,15 @@ func (c *Client) Do(ctx context.Context, pathOrURL string, opts RequestOptions) 
 		method = http.MethodGet
 	}
 
+	requestCtx := ctx
+	var cancel context.CancelFunc
+	if !opts.Streaming && c.requestTimeout > 0 {
+		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+			requestCtx, cancel = context.WithTimeout(ctx, c.requestTimeout)
+			defer cancel()
+		}
+	}
+
 	attempts := 1
 	if isIdempotent(method) {
 		attempts = 1 + maxRetries
@@ -458,26 +496,26 @@ func (c *Client) Do(ctx context.Context, pathOrURL string, opts RequestOptions) 
 		if attempt > 0 {
 			timer := time.NewTimer(delay)
 			select {
-			case <-ctx.Done():
+			case <-requestCtx.Done():
 				if !timer.Stop() {
 					select {
 					case <-timer.C:
 					default:
 					}
 				}
-				return nil, ctx.Err()
+				return nil, requestCtx.Err()
 			case <-timer.C:
 			}
 			delay *= retryDelayFactor
 		}
 
-		req, err := c.buildRequest(ctx, method, pathOrURL, opts)
+		req, err := c.buildRequest(requestCtx, method, pathOrURL, opts)
 		if err != nil {
 			return nil, err
 		}
 		resp, err := c.http.Do(req)
 		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
+			if ctxErr := requestCtx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
 			lastErr = fmt.Errorf("request to %s failed: %w", req.URL.String(), err)
@@ -537,6 +575,33 @@ func retryAfterDelay(value string) time.Duration {
 type UploadFile struct {
 	Path string
 	Name string
+}
+
+func configureTransport(client *http.Client) {
+	if client == nil {
+		return
+	}
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	base, ok := transport.(*http.Transport)
+	if !ok {
+		// A custom RoundTripper owns its own connection policy. Request
+		// contexts still enforce ordinary operation deadlines.
+		return
+	}
+
+	configured := base.Clone()
+	configured.DialContext = (&net.Dialer{
+		Timeout:   DefaultDialTimeout,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
+	configured.TLSHandshakeTimeout = DefaultTLSHandshakeTimeout
+	configured.ResponseHeaderTimeout = DefaultResponseHeaderTimeout
+	configured.IdleConnTimeout = DefaultIdleConnTimeout
+	configured.ExpectContinueTimeout = DefaultExpectContinueTimeout
+	client.Transport = configured
 }
 
 func safeRedirect(req *http.Request, _ []*http.Request) error {

@@ -72,6 +72,7 @@ export BITBUCKET_DEFAULT_WORKSPACE="workspace-slug"   # optional
 export BITBUCKET_DEFAULT_REPO="repository-slug"        # optional
 export BITBUCKET_TOKEN_TYPE="api"                       # optional: api|access|oauth
 export BITBUCKET_CLONE_PROTOCOL="https"                 # optional: https|ssh
+export BITBUCKET_HTTP_TIMEOUT="30s"                     # optional: 0 disables total request timeout
 ```
 
 ### Config file
@@ -87,6 +88,7 @@ token_type: api
 default_workspace: workspace-slug   # optional
 default_repo: repository-slug       # optional
 clone_protocol: https                # optional: https|ssh
+http_timeout: 30s                   # optional: 0 disables total request timeout
 ```
 
 All keys are optional; environment variables take precedence over file values.
@@ -99,6 +101,7 @@ with the `config` command instead of editing it by hand:
 bitbucket-cli config set email you@example.com
 bitbucket-cli config set token_type api
 bitbucket-cli config set default_workspace workspace-slug
+bitbucket-cli config set http_timeout 30s
 bitbucket-cli config get default_workspace
 bitbucket-cli config list          # API token redacted
 bitbucket-cli config path          # print the resolved file path

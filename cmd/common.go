@@ -54,6 +54,9 @@ func newClient() (config.Config, *bitbucket.Client, error) {
 	if testTransport != nil {
 		opts = append(opts, bitbucket.WithHTTPClient(&http.Client{Transport: testTransport}))
 	}
+	if cfg.HTTPTimeoutSet {
+		opts = append(opts, bitbucket.WithRequestTimeout(cfg.HTTPTimeout))
+	}
 	return cfg, bitbucket.NewClient(cfg.Auth, opts...), nil
 }
 
