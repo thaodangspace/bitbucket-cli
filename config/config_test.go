@@ -194,6 +194,47 @@ func TestAccessTokenLoadsFromKeychainWithoutEmail(t *testing.T) {
 	}
 }
 
+func TestProfiledBearerCredentialsDoNotCollide(t *testing.T) {
+	store := auth.NewMemoryStore()
+	pathA := filepath.Join(t.TempDir(), "repo-a.yaml")
+	pathB := filepath.Join(t.TempDir(), "repo-b.yaml")
+	keyA, err := CredentialStoreKeyForProfile(auth.TokenAccess, "", ProfileKey(pathA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyB, err := CredentialStoreKeyForProfile(auth.TokenAccess, "", ProfileKey(pathB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if keyA == keyB {
+		t.Fatal("profiled access-token keys collided")
+	}
+	if err := store.Set(keyA, "token-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(keyB, "token-b"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{pathA, "token-a"},
+		{pathB, "token-b"},
+	} {
+		if err := SetFileValue(tc.path, "token_type", "access"); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadConfig(map[string]string{}, t.TempDir(), tc.path, WithSecretStore(store))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.APIToken != tc.want {
+			t.Fatalf("%s resolved %q, want %q", tc.path, cfg.APIToken, tc.want)
+		}
+	}
+}
+
 func TestCredentialStoreKeyCompatibility(t *testing.T) {
 	cases := []struct {
 		tokenType auth.TokenType

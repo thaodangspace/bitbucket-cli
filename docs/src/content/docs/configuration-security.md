@@ -19,7 +19,9 @@ bitbucket-cli auth token                 # opt-in token output for scripting
 API and OAuth login validates credentials with `GET /2.0/user`; access-token
 login probes the selected/default repository before persisting anything. Tokens
 are stored in the OS credential store (macOS Keychain); the YAML config file
-keeps only non-secret profile data (`email`, `token_type`, defaults).
+keeps only non-secret profile data (`email`, `token_type`, defaults, and a
+profile-specific `credential_key` for bearer tokens). API-token entries remain
+keyed by email for compatibility.
 `--with-token` is required when stdin is not a TTY; the CLI refuses to read an
 interactive token from a pipe.
 
@@ -28,7 +30,8 @@ Supported `--token-type` values:
 - `api` (default): HTTP Basic with the Atlassian account email and API token.
 - `access`: `Authorization: Bearer <token>` for a repository/project/workspace
   resource-scoped token. Login does not require an email and requires a
-  repository context (`-R`, defaults, or a Bitbucket git remote) for validation.
+  repository context (`-R`, defaults, or a Bitbucket git remote) with
+  repository-read access for validation.
 - `oauth`: `Authorization: Bearer <token>`.
 
 `auth status` never prints the token and works without a repository default.

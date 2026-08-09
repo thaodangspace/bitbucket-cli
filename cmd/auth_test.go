@@ -149,7 +149,8 @@ func TestAuthLoginAccessTokenType(t *testing.T) {
 	if fc.TokenType != "access" || fc.Email != "" {
 		t.Fatalf("access token must not persist an account identity: %+v", fc)
 	}
-	if got, err := mustStore(t).Get("access-token"); err != nil || got != "acc-tok" {
+	accessKey := config.ProfileKey(cfgPath) + ":access"
+	if got, err := mustStore(t).Get(accessKey); err != nil || got != "acc-tok" {
 		t.Fatalf("access token not stored under resource key: %q err=%v", got, err)
 	}
 }
@@ -179,6 +180,24 @@ func TestAuthLoginAccessTokenWithoutEmailUsesBearerRepoProbe(t *testing.T) {
 	}
 }
 
+func TestEnvSetBearerCredentialsWithoutEmail(t *testing.T) {
+	t.Setenv("BITBUCKET_API_TOKEN", "bearer-secret")
+	t.Setenv("BITBUCKET_EMAIL", "")
+	t.Setenv("BITBUCKET_CONFIG", filepath.Join(t.TempDir(), "profile.yaml"))
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "access")
+	if !envSet() {
+		t.Fatal("access-token environment credentials were not detected")
+	}
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "oauth")
+	if !envSet() {
+		t.Fatal("OAuth environment credentials were not detected")
+	}
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "api")
+	if envSet() {
+		t.Fatal("API environment credentials without email were detected")
+	}
+}
+
 func TestAuthStatusAccessTokenSkipsUserProbe(t *testing.T) {
 	t.Setenv("BITBUCKET_TOKEN_TYPE", "access")
 	var paths []string
@@ -191,6 +210,65 @@ func TestAuthStatusAccessTokenSkipsUserProbe(t *testing.T) {
 	}
 	if len(paths) != 1 || strings.HasSuffix(paths[0], "/user") {
 		t.Fatalf("unexpected status paths: %v", paths)
+	}
+}
+
+func TestAuthSwitchAPIToAccessCleansOldSecretAndLogout(t *testing.T) {
+	store := auth.NewMemoryStore()
+	cfgPath := filepath.Join(t.TempDir(), "profile.yaml")
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "")
+	withStdin(t, "api-secret\n", func() {
+		if _, err := runAtStore(t, store, authUserTransport("acct-switch"), cfgPath,
+			"auth", "login", "--email", "dev@example.com", "--with-token"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	withStdin(t, "access-secret\n", func() {
+		if _, err := runAtStore(t, store, func(r *http.Request) (*http.Response, error) {
+			return jsonResp(200, `{}`), nil
+		}, cfgPath, "auth", "login", "--with-token", "--token-type", "access"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, err := store.Get("dev@example.com"); err == nil {
+		t.Fatal("API secret remained after switching token type")
+	}
+	accessKey := config.ProfileKey(cfgPath) + ":access"
+	if got, err := store.Get(accessKey); err != nil || got != "access-secret" {
+		t.Fatalf("access secret missing after switch: %q %v", got, err)
+	}
+	if _, err := runAtStore(t, store, nil, cfgPath, "auth", "logout", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(accessKey); err == nil {
+		t.Fatal("access secret remained after logout")
+	}
+}
+
+func TestAuthSwitchAccessToOAuthCleansOldSecret(t *testing.T) {
+	store := auth.NewMemoryStore()
+	cfgPath := filepath.Join(t.TempDir(), "profile.yaml")
+	t.Setenv("BITBUCKET_TOKEN_TYPE", "")
+	withStdin(t, "access-secret\n", func() {
+		if _, err := runAtStore(t, store, func(r *http.Request) (*http.Response, error) {
+			return jsonResp(200, `{}`), nil
+		}, cfgPath, "auth", "login", "--with-token", "--token-type", "access"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	withStdin(t, "oauth-secret\n", func() {
+		if _, err := runAtStore(t, store, authUserTransport("oauth-acct"), cfgPath,
+			"auth", "login", "--with-token", "--token-type", "oauth"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	accessKey := config.ProfileKey(cfgPath) + ":access"
+	oauthKey := config.ProfileKey(cfgPath) + ":oauth"
+	if _, err := store.Get(accessKey); err == nil {
+		t.Fatal("access secret remained after switching to OAuth")
+	}
+	if got, err := store.Get(oauthKey); err != nil || got != "oauth-secret" {
+		t.Fatalf("OAuth secret missing after switch: %q %v", got, err)
 	}
 }
 

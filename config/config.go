@@ -5,6 +5,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +33,7 @@ type Config struct {
 	Email            string
 	APIToken         string
 	TokenType        string // auth token type: "api", "access", or "oauth"
+	CredentialKey    string // non-secret profile key for bearer credentials
 	CredentialSource CredentialSource
 	Auth             auth.Provider
 	DefaultWorkspace string
@@ -58,13 +61,14 @@ type FileConfig struct {
 	Email            string `yaml:"email,omitempty"`
 	APIToken         string `yaml:"api_token,omitempty"`
 	TokenType        string `yaml:"token_type,omitempty"`
+	CredentialKey    string `yaml:"credential_key,omitempty"`
 	DefaultWorkspace string `yaml:"default_workspace,omitempty"`
 	DefaultRepo      string `yaml:"default_repo,omitempty"`
 	CloneProtocol    string `yaml:"clone_protocol,omitempty"`
 }
 
 // FileKeys are the keys settable in the config file, in display order.
-var FileKeys = []string{"email", "token_type", "api_token", "default_workspace", "default_repo", "clone_protocol"}
+var FileKeys = []string{"email", "token_type", "credential_key", "api_token", "default_workspace", "default_repo", "clone_protocol"}
 
 func (fc *FileConfig) field(key string) (*string, error) {
 	switch key {
@@ -74,6 +78,8 @@ func (fc *FileConfig) field(key string) (*string, error) {
 		return &fc.APIToken, nil
 	case "token_type":
 		return &fc.TokenType, nil
+	case "credential_key":
+		return &fc.CredentialKey, nil
 	case "default_workspace":
 		return &fc.DefaultWorkspace, nil
 	case "default_repo":
@@ -208,6 +214,36 @@ func CredentialStoreKey(tokenType auth.TokenType, email string) (string, error) 
 	}
 }
 
+// ProfileKey derives a stable, non-secret identifier from a config path. It
+// lets multiple BITBUCKET_CONFIG profiles share one credential service without
+// sharing their bearer token entries.
+func ProfileKey(path string) string {
+	path = strings.TrimSpace(path)
+	if path != "" {
+		if absolute, err := filepath.Abs(path); err == nil {
+			path = absolute
+		}
+	}
+	sum := sha256.Sum256([]byte(path))
+	return "profile-" + hex.EncodeToString(sum[:12])
+}
+
+// CredentialStoreKeyForProfile returns a namespaced key for a bearer profile.
+// API-token keys intentionally remain email-based for backward compatibility.
+func CredentialStoreKeyForProfile(tokenType auth.TokenType, email, profileKey string) (string, error) {
+	if tokenType == auth.TokenAPI {
+		return CredentialStoreKey(tokenType, email)
+	}
+	if tokenType != auth.TokenAccess && tokenType != auth.TokenOAuth {
+		return "", fmt.Errorf("unsupported token type %q", tokenType)
+	}
+	profileKey = strings.TrimSpace(profileKey)
+	if profileKey == "" {
+		return "", fmt.Errorf("credential profile key is required for %s credentials", tokenType)
+	}
+	return profileKey + ":" + string(tokenType), nil
+}
+
 func validTokenType(value string) bool {
 	switch auth.TokenType(strings.TrimSpace(value)) {
 	case auth.TokenAPI, auth.TokenAccess, auth.TokenOAuth:
@@ -232,14 +268,20 @@ func WithSecretStore(s auth.SecretStore) LoadOption {
 
 // resolveToken determines the active token following env > config file >
 // credential store precedence. The second return is the CredentialSource.
-func resolveToken(env map[string]string, file FileConfig, store auth.SecretStore, tokenType auth.TokenType, email string) (string, CredentialSource, error) {
+func resolveToken(env map[string]string, file FileConfig, store auth.SecretStore, tokenType auth.TokenType, email, profileKey string) (string, CredentialSource, error) {
 	if t := trimmed(env, "BITBUCKET_API_TOKEN"); t != "" {
 		return t, SourceEnv, nil
 	}
 	if t := strings.TrimSpace(file.APIToken); t != "" {
 		return t, SourceFile, nil
 	}
-	key, err := CredentialStoreKey(tokenType, email)
+	var key string
+	var err error
+	if tokenType == auth.TokenAPI {
+		key, err = CredentialStoreKey(tokenType, email)
+	} else {
+		key, err = CredentialStoreKeyForProfile(tokenType, email, profileKey)
+	}
 	if err != nil {
 		// Missing API email means there cannot be an API keychain lookup, but
 		// it is valid for access/OAuth credentials and should be handled by
@@ -255,6 +297,17 @@ func resolveToken(env map[string]string, file FileConfig, store auth.SecretStore
 		// A broken credential store must not break env/file automation;
 		// treat it as "no keychain token" rather than failing.
 		return "", "", nil
+	}
+	// Profiles created before credential_key was persisted used the
+	// token-type-global key. Keep a one-way compatibility fallback; new login
+	// writes the namespaced key and therefore cannot collide.
+	if tokenType != auth.TokenAPI && strings.TrimSpace(file.CredentialKey) == "" {
+		legacyKey, legacyErr := CredentialStoreKey(tokenType, email)
+		if legacyErr == nil {
+			if t, getErr := store.Get(legacyKey); getErr == nil {
+				return strings.TrimSpace(t), SourceKeychain, nil
+			}
+		}
 	}
 	return "", "", nil
 }
@@ -286,7 +339,11 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 	}
 
 	tt := auth.TokenType(tokenType)
-	token, source, err := resolveToken(env, file, o.SecretStore, tt, email)
+	credentialKey := strings.TrimSpace(file.CredentialKey)
+	if tt != auth.TokenAPI && credentialKey == "" {
+		credentialKey = ProfileKey(configPath)
+	}
+	token, source, err := resolveToken(env, file, o.SecretStore, tt, email, credentialKey)
 	if err != nil {
 		return Config{}, err
 	}
@@ -323,6 +380,7 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 		Email:            email,
 		APIToken:         token,
 		TokenType:        tokenType,
+		CredentialKey:    credentialKey,
 		CredentialSource: source,
 		Auth:             auth.ProviderFor(tt, email, token),
 		DefaultWorkspace: workspace,

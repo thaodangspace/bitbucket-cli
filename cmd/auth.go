@@ -52,6 +52,17 @@ func init() {
 			if path == "" {
 				return fail(fmt.Errorf("could not resolve a config file path"))
 			}
+			previous, err := config.LoadFileConfig(path)
+			if err != nil {
+				return fail(err)
+			}
+			oldKey, oldKeyErr := storedProfileKey(previous, path)
+			oldStored := false
+			if oldKeyErr == nil {
+				if _, getErr := auth.CurrentStore().Get(oldKey); getErr == nil {
+					oldStored = true
+				}
+			}
 
 			interactive := stdinIsTTY()
 			// API tokens represent an Atlassian account and require an email.
@@ -113,41 +124,40 @@ func init() {
 			}
 
 			// Store identity only for account credentials. Access/OAuth token
-			// profiles use stable credential keys and do not invent an account.
-			if err := config.SetFileValue(path, "email", func() string {
-				if tt == auth.TokenAPI {
-					return email
-				}
-				return ""
-			}()); err != nil {
-				return fail(err)
-			}
-			if err := config.SetFileValue(path, "token_type", string(tt)); err != nil {
-				return fail(err)
-			}
-			// A legacy api_token is an API-profile format. Remove it when
-			// selecting a bearer profile so it cannot shadow the new keychain
-			// credential; API login migrates it below for compatibility.
-			if tt != auth.TokenAPI {
-				if err := config.SetFileValue(path, "api_token", ""); err != nil {
-					return fail(err)
-				}
-			}
-			// One-time cleanup of a legacy plaintext API token. It is an API
-			// profile format and must retain its email-based keychain key.
+			// profiles use a persisted, namespaced key and do not invent an
+			// account. Write the new secret before changing the profile file so a
+			// failed keychain write leaves the old profile usable.
+			next := previous
 			if tt == auth.TokenAPI {
-				if migrated, err := config.MigrateLegacyToken(path, auth.CurrentStore()); err != nil {
-					return fail(err)
-				} else if migrated {
-					_, _ = fmt.Fprintln(os.Stderr, "Migrated legacy plaintext api_token to the credential store.")
+				next.Email = email
+				next.CredentialKey = ""
+			} else {
+				next.Email = ""
+				if strings.TrimSpace(next.CredentialKey) == "" {
+					next.CredentialKey = config.ProfileKey(path)
 				}
 			}
-			storeKey, err := config.CredentialStoreKey(tt, email)
+			next.TokenType = string(tt)
+			next.APIToken = ""
+			storeKey, err := profileStoreKeyForLogin(tt, email, next.CredentialKey, path)
 			if err != nil {
 				return fail(err)
 			}
 			if err := auth.CurrentStore().Set(storeKey, token); err != nil {
 				return fail(err)
+			}
+			if err := config.WriteFileConfig(path, next); err != nil {
+				_ = auth.CurrentStore().Delete(storeKey)
+				return fail(err)
+			}
+			if oldStored && oldKey != storeKey {
+				if err := auth.CurrentStore().Delete(oldKey); err != nil {
+					// Roll back the profile and the newly written secret. The old
+					// credential remains the only active profile on failure.
+					_ = config.WriteFileConfig(path, previous)
+					_ = auth.CurrentStore().Delete(storeKey)
+					return fail(fmt.Errorf("remove previous credential: %w", err))
+				}
 			}
 
 			if flagPretty {
@@ -212,10 +222,10 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			storeKey, keyErr := config.CredentialStoreKey(tt, email)
-			hasProfile := email != "" || strings.TrimSpace(fc.TokenType) != ""
-			if keyErr != nil && !flagLogoutYes {
-				return fail(fmt.Errorf("no stored profile to log out"))
+			storeKey, keyErr := storedProfileKey(fc, path)
+			hasProfile := strings.TrimSpace(fc.Email) != "" || strings.TrimSpace(fc.TokenType) != ""
+			if keyErr != nil && hasProfile {
+				return fail(keyErr)
 			}
 			if !hasProfile && !flagLogoutYes {
 				return fail(fmt.Errorf("no stored profile to log out"))
@@ -255,6 +265,12 @@ func init() {
 			}
 			if strings.TrimSpace(fc.TokenType) != "" {
 				if err := config.SetFileValue(path, "token_type", ""); err != nil {
+					return fail(err)
+				}
+				changed = true
+			}
+			if strings.TrimSpace(fc.CredentialKey) != "" {
+				if err := config.SetFileValue(path, "credential_key", ""); err != nil {
 					return fail(err)
 				}
 				changed = true
@@ -310,6 +326,37 @@ var (
 	flagStatusJSON     bool
 	flagLogoutYes      bool
 )
+
+// storedProfileKey returns the key used by a persisted profile. Profiles
+// written before credential_key was introduced use the legacy bearer key.
+func storedProfileKey(fc config.FileConfig, path string) (string, error) {
+	tokenType := strings.TrimSpace(fc.TokenType)
+	if tokenType == "" {
+		tokenType = string(auth.TokenAPI)
+	}
+	tt, err := parseTokenType(tokenType)
+	if err != nil {
+		return "", err
+	}
+	email := strings.TrimSpace(fc.Email)
+	if tt == auth.TokenAPI {
+		return config.CredentialStoreKey(tt, email)
+	}
+	if key := strings.TrimSpace(fc.CredentialKey); key != "" {
+		return config.CredentialStoreKeyForProfile(tt, email, key)
+	}
+	return config.CredentialStoreKey(tt, email)
+}
+
+func profileStoreKeyForLogin(tokenType auth.TokenType, email, profileKey, path string) (string, error) {
+	if tokenType == auth.TokenAPI {
+		return config.CredentialStoreKey(tokenType, email)
+	}
+	if strings.TrimSpace(profileKey) == "" {
+		profileKey = config.ProfileKey(path)
+	}
+	return config.CredentialStoreKeyForProfile(tokenType, email, profileKey)
+}
 
 // parseTokenType validates --token-type against the supported values.
 func parseTokenType(s string) (auth.TokenType, error) {
@@ -530,8 +577,9 @@ func redactString(s, secret string) string {
 	return auth.Redact(s, secret)
 }
 
-// envSet reports whether credential environment variables are present.
+// envSet reports whether the active credential resolves from environment
+// variables. Bearer credentials intentionally do not require an email.
 func envSet() bool {
-	return strings.TrimSpace(os.Getenv("BITBUCKET_EMAIL")) != "" &&
-		strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN")) != ""
+	cfg, err := loadConfig()
+	return err == nil && cfg.CredentialSource == config.SourceEnv
 }

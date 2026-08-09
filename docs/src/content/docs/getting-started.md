@@ -75,8 +75,9 @@ export BITBUCKET_DEFAULT_REPO="repository-slug"
 ### Config file
 
 `~/.config/bitbucket-cli.yaml` holds non-secret profile data (email, token type,
-defaults). A legacy plaintext `api_token` is still accepted but `auth login`
-migrates it to the credential store and removes it from the file:
+defaults, and a profile-specific bearer `credential_key`). A legacy plaintext
+`api_token` is still accepted but `auth login` migrates it to the credential
+store and removes it from the file:
 
 ```yaml
 email: you@example.com
