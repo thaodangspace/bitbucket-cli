@@ -57,8 +57,11 @@ bitbucket-cli auth token                 # opt-in: print the token for scripts
 ```
 
 `--token-type api|access|oauth` selects API tokens (default), Bitbucket access
-tokens, or OAuth bearer tokens. Tokens are never echoed by these commands; a
-legacy plaintext `api_token` in YAML is migrated by `auth login` and removed.
+tokens, or OAuth bearer tokens. API tokens use HTTP Basic with the Atlassian
+account email; access and OAuth tokens use `Authorization: Bearer`. Access
+tokens are resource-scoped, so login validates the selected/default repository
+and does not require an email. Tokens are never echoed by these commands; a
+legacy plaintext `api_token` in YAML is migrated by API-token login and removed.
 
 ### Environment variables
 
@@ -99,7 +102,9 @@ bitbucket-cli config list          # API token redacted
 bitbucket-cli config path          # print the resolved file path
 ```
 
-The token must be an Atlassian API token with access to the target workspace.
+API tokens must be Atlassian API tokens with access to the target workspace.
+Bitbucket access tokens are resource-scoped and use Bearer authentication; they
+must be validated against a repository context. OAuth tokens also use Bearer.
 Recommended scopes: `read:repository:bitbucket`, `read:pullrequest:bitbucket`,
 and `write:pullrequest:bitbucket` to create/update PRs and post comments. Add
 `write:repository:bitbucket` when using `pr attach`, which uploads files to
