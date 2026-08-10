@@ -607,6 +607,18 @@ func (r *deleteRecorder) Delete(account string) error {
 	return r.MemoryStore.Delete(account)
 }
 
+type deleteFailRecorder struct {
+	*auth.MemoryStore
+	failAccount string
+}
+
+func (r *deleteFailRecorder) Delete(account string) error {
+	if account == r.failAccount {
+		return errors.New("credential is locked")
+	}
+	return r.MemoryStore.Delete(account)
+}
+
 // chmodReadOnly makes a file unwritable so config writes fail deterministically.
 // It is skipped when running as root, which can write anyway.
 func chmodReadOnly(t *testing.T, path string) {
@@ -730,6 +742,49 @@ func TestAuthLoginRollbackRestoresPreviousSecret(t *testing.T) {
 	}
 	if got, err := store.Get("dev@example.com"); err != nil || got != "old-secret" {
 		t.Fatalf("previous credential must be restored after a failed re-login: got %q err=%v", got, err)
+	}
+}
+
+func TestAuthLoginCleanupFailureRestoresTargetCredential(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := os.WriteFile(cfgPath, []byte("email: old@example.com\ntoken_type: api\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	targetKey, err := config.CredentialStoreKeyForProfile(auth.TokenAccess, "", config.ProfileKey(cfgPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &deleteFailRecorder{
+		MemoryStore: auth.NewMemoryStore(),
+		failAccount: "old@example.com",
+	}
+	if err := store.Set("old@example.com", "old-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(targetKey, "target-old-secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	withStdin(t, "new-access-secret\n", func() {
+		_, err := runAtStore(t, store, authUserTransport("acct-switch"), cfgPath,
+			"auth", "login", "--token-type", "access", "--with-token")
+		if err == nil {
+			t.Fatal("expected login to fail when old credential cleanup fails")
+		}
+	})
+
+	fc, err := config.LoadFileConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fc.Email != "old@example.com" || fc.TokenType != string(auth.TokenAPI) {
+		t.Fatalf("previous profile must be restored: %+v", fc)
+	}
+	if got, err := store.Get("old@example.com"); err != nil || got != "old-secret" {
+		t.Fatalf("old credential must remain after cleanup failure: got %q err=%v", got, err)
+	}
+	if got, err := store.Get(targetKey); err != nil || got != "target-old-secret" {
+		t.Fatalf("target credential must be restored after cleanup failure: got %q err=%v", got, err)
 	}
 }
 

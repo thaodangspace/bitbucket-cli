@@ -174,11 +174,19 @@ func init() {
 			}
 			if oldStored && oldKey != storeKey {
 				if err := store.Delete(oldKey); err != nil {
-					// Roll back the profile and the newly written secret. The old
-					// credential remains the only active profile on failure.
-					_ = config.WriteFileConfig(path, previous)
-					_ = store.Delete(storeKey)
-					return fail(fmt.Errorf("remove previous credential: %w", err))
+					// Roll back both sides of the transaction. The target key may
+					// have contained a credential before this login, so restore its
+					// snapshot instead of unconditionally deleting it.
+					configRollbackErr := config.WriteFileConfig(path, previous)
+					secretRollbackErr := auth.RestoreSecret(store, storeKey, prevSecret, prevExisted)
+					message := fmt.Sprintf("remove previous credential: %v", err)
+					if configRollbackErr != nil {
+						message += fmt.Sprintf("; failed to restore previous profile: %v", configRollbackErr)
+					}
+					if secretRollbackErr != nil {
+						message += fmt.Sprintf("; failed to restore target credential: %v", secretRollbackErr)
+					}
+					return fail(fmt.Errorf("%s", message))
 				}
 			}
 
