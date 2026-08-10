@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
@@ -216,10 +217,21 @@ func (s *Service) ApplyWebhooks(ctx context.Context, target WebhookTarget, specs
 	return result
 }
 
-func (s *Service) EventCatalog(ctx context.Context, subject string) ([]string, error) {
-	// Event catalog caching is intentionally left to the command boundary for
-	// now. This method still accepts the policy object so callers do not need
-	// process globals and the cache policy can be added without changing its API.
+// EventCatalogCache is an optional boundary for the CLI's local cache. The
+// service does not know where or how the cache is persisted.
+type EventCatalogCache interface {
+	Get(subject string) ([]string, bool)
+	Put(subject string, events []string)
+}
+
+type EventCatalogOptions struct{ Cache EventCatalogCache }
+
+func (s *Service) EventCatalog(ctx context.Context, subject string, options EventCatalogOptions) ([]string, error) {
+	if options.Cache != nil {
+		if events, ok := options.Cache.Get(subject); ok && len(events) > 0 {
+			return events, nil
+		}
+	}
 	var raw json.RawMessage
 	if err := s.client.Request(ctx, "/hook_events/"+bitbucket.EncodePathSegment(subject), bitbucket.RequestOptions{}, &raw); err != nil {
 		return nil, err
@@ -253,6 +265,9 @@ func (s *Service) EventCatalog(ctx context.Context, subject string) ([]string, e
 	if len(events) == 0 {
 		return nil, fmt.Errorf("webhook event catalog for %s was empty or had an unsupported shape", subject)
 	}
+	if options.Cache != nil {
+		options.Cache.Put(subject, events)
+	}
 	return events, nil
 }
 
@@ -269,7 +284,7 @@ func UniqueStrings(values []string) []string {
 	return out
 }
 
-func ValidateWebhookEvents(ctx context.Context, service *Service, subject string, requested []string, allowUnknown bool) ([]string, error) {
+func ValidateWebhookEvents(ctx context.Context, service *Service, subject string, requested []string, allowUnknown bool, options EventCatalogOptions) ([]string, error) {
 	requested = UniqueStrings(requested)
 	if len(requested) == 0 {
 		return nil, fmt.Errorf("at least one --event is required")
@@ -277,7 +292,7 @@ func ValidateWebhookEvents(ctx context.Context, service *Service, subject string
 	if allowUnknown {
 		return requested, nil
 	}
-	valid, err := service.EventCatalog(ctx, subject)
+	valid, err := service.EventCatalog(ctx, subject, options)
 	if err != nil {
 		return nil, err
 	}
@@ -287,10 +302,56 @@ func ValidateWebhookEvents(ctx context.Context, service *Service, subject string
 	}
 	for _, event := range requested {
 		if !known[event] {
-			return nil, fmt.Errorf("unknown webhook event %q; use --allow-unknown-event to bypass validation", event)
+			return nil, fmt.Errorf("unknown webhook event %q (did you mean %q?); use --allow-unknown-event to bypass validation", event, eventSuggestion(event, valid))
 		}
 	}
 	return requested, nil
+}
+
+func eventSuggestion(value string, valid []string) string {
+	best := ""
+	bestDistance := 999
+	for _, candidate := range valid {
+		distance := levenshtein(strings.ToLower(value), strings.ToLower(candidate))
+		if distance < bestDistance {
+			best, bestDistance = candidate, distance
+		}
+	}
+	if bestDistance > 8 {
+		return "a valid catalog event"
+	}
+	return best
+}
+
+func levenshtein(a, b string) int {
+	row := make([]int, len(b)+1)
+	for i := range row {
+		row[i] = i
+	}
+	for i, ra := range a {
+		previous := row[0]
+		row[0] = i + 1
+		for j, rb := range b {
+			old := row[j+1]
+			cost := 0
+			if ra != rb {
+				cost = 1
+			}
+			row[j+1] = min(row[j+1]+1, row[j]+1, previous+cost)
+			previous = old
+		}
+	}
+	return row[len(b)]
+}
+
+func min(values ...int) int {
+	result := values[0]
+	for _, value := range values[1:] {
+		if value < result {
+			result = value
+		}
+	}
+	return result
 }
 
 // PublicKey is normalized public-key material plus stable metadata.
@@ -427,12 +488,12 @@ func KeyDuplicate(values []json.RawMessage, fingerprint string) bool {
 	return false
 }
 
-func ResolveDeployTarget(repository string) (string, selector.Repository, error) {
+func ResolveDeployTarget(repository string) (string, error) {
 	ref, err := selector.RepositorySelector(repository)
 	if err != nil {
-		return "", selector.Repository{}, err
+		return "", err
 	}
-	return fmt.Sprintf("/repositories/%s/%s/deploy-keys", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.Repo)), ref, nil
+	return fmt.Sprintf("/repositories/%s/%s/deploy-keys", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.Repo)), nil
 }
 func (s *Service) ListDeployKeys(ctx context.Context, path string, limit int) ([]json.RawMessage, error) {
 	return s.client.Paginate(ctx, path+"?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), limit, bitbucket.DefaultMaxPages)
@@ -450,5 +511,10 @@ func (s *Service) AddDeployKey(ctx context.Context, path string, key PublicKey, 
 	return raw, err
 }
 func (s *Service) DeleteDeployKey(ctx context.Context, path, id string) error {
-	return s.client.Request(ctx, path+"/"+id, bitbucket.RequestOptions{Method: http.MethodDelete}, nil)
+	id = strings.TrimSpace(id)
+	numericID, err := strconv.Atoi(id)
+	if err != nil || numericID <= 0 {
+		return fmt.Errorf("invalid deploy key id %q", id)
+	}
+	return s.client.Request(ctx, path+"/"+bitbucket.EncodePathSegment(strconv.Itoa(numericID)), bitbucket.RequestOptions{Method: http.MethodDelete}, nil)
 }

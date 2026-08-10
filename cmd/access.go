@@ -17,7 +17,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
-	"github.com/thaodangspace/bitbucket-cli/config"
 	accesssvc "github.com/thaodangspace/bitbucket-cli/internal/access"
 	"github.com/thaodangspace/bitbucket-cli/output"
 	"gopkg.in/yaml.v3"
@@ -104,21 +103,6 @@ func accessService(client *bitbucket.Client) *accesssvc.Service {
 	return accesssvc.New(client)
 }
 
-func accessWebhookTarget(repository, workspace string) (accesssvc.WebhookTarget, error) {
-	return accesssvc.ResolveWebhookTarget(repository, workspace)
-}
-
-// webhookTarget is retained as a small compatibility adapter for command
-// rendering and existing command-layer tests. Resolution itself belongs to the
-// access service.
-func webhookTarget(repository, workspace string) (subject, base, label string, err error) {
-	target, err := accessWebhookTarget(repository, workspace)
-	if err != nil {
-		return "", "", "", err
-	}
-	return target.Subject, target.Path, target.Label, nil
-}
-
 func validateWebhookURL(value string, allowInsecureLocalhost, allowPrivate bool) error {
 	u, err := url.Parse(strings.TrimSpace(value))
 	if err != nil || u.Scheme == "" || u.Hostname() == "" {
@@ -160,109 +144,46 @@ func privateWebhookHost(host string) bool {
 	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
 }
 
-func eventCatalog(ctx context.Context, client *bitbucket.Client, subject string, noCache bool) ([]string, error) {
-	cacheDir := os.Getenv("BITBUCKET_CACHE_DIR")
-	cachePath := ""
-	if !noCache && os.Getenv("BITBUCKET_DISABLE_CACHE") == "" && cacheDir != "" {
-		cachePath = cacheDir + "/webhook-events-" + subject + ".json"
-		if data, err := os.ReadFile(cachePath); err == nil {
-			var cached struct {
-				Fetched time.Time `json:"fetched"`
-				Events  []string  `json:"events"`
-			}
-			if json.Unmarshal(data, &cached) == nil && time.Since(cached.Fetched) < 10*time.Minute && len(cached.Events) > 0 {
-				return cached.Events, nil
-			}
-		}
-	}
-	events, err := accessService(client).EventCatalog(ctx, subject)
+type webhookEventCache struct{ dir string }
+
+func (c webhookEventCache) Get(subject string) ([]string, bool) {
+	data, err := os.ReadFile(c.dir + "/webhook-events-" + subject + ".json")
 	if err != nil {
-		return nil, err
+		return nil, false
 	}
-	if cachePath != "" {
-		data, _ := json.Marshal(struct {
-			Fetched time.Time `json:"fetched"`
-			Events  []string  `json:"events"`
-		}{time.Now().UTC(), events})
-		_ = os.MkdirAll(cacheDir, 0700)
-		_ = os.WriteFile(cachePath, data, 0600)
+	var cached struct {
+		Fetched time.Time `json:"fetched"`
+		Events  []string  `json:"events"`
 	}
-	return events, nil
+	if json.Unmarshal(data, &cached) != nil || time.Since(cached.Fetched) >= 10*time.Minute || len(cached.Events) == 0 {
+		return nil, false
+	}
+	return cached.Events, true
 }
 
-func validateWebhookEvents(ctx context.Context, client *bitbucket.Client, subject string, requested []string, allowUnknown, noCache bool) ([]string, error) {
-	requested = uniqueStrings(requested)
-	if len(requested) == 0 {
-		return nil, fmt.Errorf("at least one --event is required")
+func (c webhookEventCache) Put(subject string, events []string) {
+	data, _ := json.Marshal(struct {
+		Fetched time.Time `json:"fetched"`
+		Events  []string  `json:"events"`
+	}{time.Now().UTC(), events})
+	_ = os.MkdirAll(c.dir, 0700)
+	_ = os.WriteFile(c.dir+"/webhook-events-"+subject+".json", data, 0600)
+}
+
+func webhookEventOptions(noCache bool) accesssvc.EventCatalogOptions {
+	if noCache || os.Getenv("BITBUCKET_DISABLE_CACHE") != "" {
+		return accesssvc.EventCatalogOptions{}
 	}
-	if allowUnknown {
-		return requested, nil
+	if dir := os.Getenv("BITBUCKET_CACHE_DIR"); dir != "" {
+		return accesssvc.EventCatalogOptions{Cache: webhookEventCache{dir: dir}}
 	}
-	valid, err := eventCatalog(ctx, client, subject, noCache)
-	if err != nil {
-		return nil, err
-	}
-	known := map[string]bool{}
-	for _, event := range valid {
-		known[event] = true
-	}
-	for _, event := range requested {
-		if !known[event] {
-			return nil, fmt.Errorf("unknown webhook event %q (did you mean %q?); use --allow-unknown-event to bypass validation", event, eventSuggestion(event, valid))
-		}
-	}
-	return requested, nil
+	return accesssvc.EventCatalogOptions{}
 }
 
 // uniqueStrings remains as a compatibility adapter for declarative-file
 // helpers; normalization is owned by the access service.
 func uniqueStrings(values []string) []string {
 	return accesssvc.UniqueStrings(values)
-}
-
-func eventSuggestion(value string, valid []string) string {
-	best := ""
-	bestDistance := 999
-	for _, candidate := range valid {
-		d := levenshtein(strings.ToLower(value), strings.ToLower(candidate))
-		if d < bestDistance {
-			best, bestDistance = candidate, d
-		}
-	}
-	if bestDistance > 8 {
-		return "a valid catalog event"
-	}
-	return best
-}
-
-func levenshtein(a, b string) int {
-	row := make([]int, len(b)+1)
-	for i := range row {
-		row[i] = i
-	}
-	for i, ra := range a {
-		previous := row[0]
-		row[0] = i + 1
-		for j, rb := range b {
-			old := row[j+1]
-			cost := 0
-			if ra != rb {
-				cost = 1
-			}
-			row[j+1] = minAccessInt(row[j+1]+1, row[j]+1, previous+cost)
-			previous = old
-		}
-	}
-	return row[len(b)]
-}
-func minAccessInt(values ...int) int {
-	result := values[0]
-	for _, value := range values[1:] {
-		if value < result {
-			result = value
-		}
-	}
-	return result
 }
 
 func readWebhookSecret(useStdin, prompt bool, envName string) (string, bool, error) {
@@ -345,7 +266,7 @@ func init() {
 		}
 		// /hook_events is a public catalog and intentionally has no
 		// capability/scope preflight.
-		values, err := eventCatalog(ctx(cmd), client, subject, eventNoCache)
+		values, err := accessService(client).EventCatalog(ctx(cmd), subject, webhookEventOptions(eventNoCache))
 		if err != nil {
 			return fail(err)
 		}
@@ -369,7 +290,7 @@ func init() {
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
 		}
-		target, err := accessWebhookTarget(firstNonEmptyCLI(listRepository, flagRepository), firstNonEmptyCLI(listWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(listRepository, flagRepository), firstNonEmptyCLI(listWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
@@ -391,7 +312,7 @@ func init() {
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
 		}
-		target, err := accessWebhookTarget(firstNonEmptyCLI(viewRepository, flagRepository), firstNonEmptyCLI(viewWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(viewRepository, flagRepository), firstNonEmptyCLI(viewWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
@@ -417,14 +338,15 @@ func init() {
 		if err = requireCapability(cfg, "webhook.write"); err != nil {
 			return fail(err)
 		}
-		subject, path, _, err := webhookTarget(firstNonEmptyCLI(createRepository, flagRepository), firstNonEmptyCLI(createWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(createRepository, flagRepository), firstNonEmptyCLI(createWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
+		subject, path := target.Subject, target.Path
 		if err = validateWebhookURL(createURL, createAllowHTTP, createAllowPrivate); err != nil {
 			return fail(err)
 		}
-		events, err := validateWebhookEvents(ctx(cmd), client, subject, createEvents, createAllowUnknown, createNoCache)
+		events, err := accesssvc.ValidateWebhookEvents(ctx(cmd), accessService(client), subject, createEvents, createAllowUnknown, webhookEventOptions(createNoCache))
 		if err != nil {
 			return fail(err)
 		}
@@ -459,7 +381,7 @@ func init() {
 		if err = requireCapability(cfg, "webhook.write"); err != nil {
 			return fail(err)
 		}
-		target, err := accessWebhookTarget(firstNonEmptyCLI(editRepository, flagRepository), firstNonEmptyCLI(editWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(editRepository, flagRepository), firstNonEmptyCLI(editWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
@@ -474,7 +396,7 @@ func init() {
 			edit.Description = &editDescription
 		}
 		if cmd.Flags().Changed("event") {
-			events, e := validateWebhookEvents(ctx(cmd), client, target.Subject, editEvents, editAllowUnknown, editNoCache)
+			events, e := accesssvc.ValidateWebhookEvents(ctx(cmd), accessService(client), target.Subject, editEvents, editAllowUnknown, webhookEventOptions(editNoCache))
 			if e != nil {
 				return fail(e)
 			}
@@ -515,10 +437,11 @@ func init() {
 		if err = requireCapability(cfg, "webhook.delete"); err != nil {
 			return fail(err)
 		}
-		_, path, label, err := webhookTarget(firstNonEmptyCLI(deleteRepository, flagRepository), firstNonEmptyCLI(deleteWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(deleteRepository, flagRepository), firstNonEmptyCLI(deleteWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
+		path, label := target.Path, target.Label
 		if err := accessService(client).DeleteWebhook(ctx(cmd), accesssvc.WebhookTarget{Path: path}, args[0]); err != nil {
 			return fail(err)
 		}
@@ -540,14 +463,11 @@ func init() {
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
 		}
-		subject, _, label, err := webhookTarget(firstNonEmptyCLI(exportRepository, flagRepository), firstNonEmptyCLI(exportWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(exportRepository, flagRepository), firstNonEmptyCLI(exportWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
-		target, err := accessWebhookTarget(firstNonEmptyCLI(exportRepository, flagRepository), firstNonEmptyCLI(exportWorkspace, flagWorkspace))
-		if err != nil {
-			return fail(err)
-		}
+		subject, label := target.Subject, target.Label
 		values, err := accessService(client).ListAllWebhooks(ctx(cmd), target)
 		if err != nil {
 			return fail(err)
@@ -598,7 +518,7 @@ func init() {
 			}
 			workspace = doc.Workspace
 		}
-		target, err := accessWebhookTarget(repository, workspace)
+		target, err := accesssvc.ResolveWebhookTarget(repository, workspace)
 		if err != nil {
 			return fail(err)
 		}
@@ -610,7 +530,7 @@ func init() {
 			if err := validateWebhookURL(doc.Hooks[i].URL, applyAllowHTTP, applyAllowPrivate); err != nil {
 				return fail(fmt.Errorf("hooks[%d]: %w", i, err))
 			}
-			events, e := validateWebhookEvents(ctx(cmd), client, subject, doc.Hooks[i].Events, applyAllowUnknown, applyNoCache)
+			events, e := accesssvc.ValidateWebhookEvents(ctx(cmd), accessService(client), subject, doc.Hooks[i].Events, applyAllowUnknown, webhookEventOptions(applyNoCache))
 			if e != nil {
 				return fail(fmt.Errorf("hooks[%d]: %w", i, e))
 			}
@@ -1193,14 +1113,6 @@ func init() {
 	rootCmd.AddCommand(sshCmd)
 }
 
-func deployBase(repository string) (string, config.ResolvedRepoRef, error) {
-	ref, err := parseRepositorySelector(repository)
-	if err != nil {
-		return "", config.ResolvedRepoRef{}, err
-	}
-	return fmt.Sprintf("/repositories/%s/%s/deploy-keys", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.RepoSlug)), ref, nil
-}
-
 func init() {
 	deployCmd := &cobra.Command{Use: "deploy-key", Short: "Manage repository deploy keys (read-only Git access)"}
 	var listRepository string
@@ -1213,7 +1125,7 @@ func init() {
 		if err = requireCapability(cfg, "deploy-key.read"); err != nil {
 			return fail(err)
 		}
-		path, _, err := deployBase(firstNonEmptyCLI(listRepository, flagRepository))
+		path, err := accesssvc.ResolveDeployTarget(firstNonEmptyCLI(listRepository, flagRepository))
 		if err != nil {
 			return fail(err)
 		}
@@ -1242,7 +1154,7 @@ func init() {
 		if err = requireCapability(cfg, "deploy-key.write"); err != nil {
 			return fail(err)
 		}
-		path, _, err := deployBase(firstNonEmptyCLI(addRepository, flagRepository))
+		path, err := accesssvc.ResolveDeployTarget(firstNonEmptyCLI(addRepository, flagRepository))
 		if err != nil {
 			return fail(err)
 		}
@@ -1272,7 +1184,7 @@ func init() {
 		if err = requireCapability(cfg, "deploy-key.delete"); err != nil {
 			return fail(err)
 		}
-		path, _, err := deployBase(firstNonEmptyCLI(delRepository, flagRepository))
+		path, err := accesssvc.ResolveDeployTarget(firstNonEmptyCLI(delRepository, flagRepository))
 		if err != nil {
 			return fail(err)
 		}
