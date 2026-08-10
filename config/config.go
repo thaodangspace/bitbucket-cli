@@ -311,6 +311,13 @@ func resolveToken(env map[string]string, file FileConfig, store auth.SecretStore
 	}
 	if t, err := store.Get(key); err == nil {
 		return strings.TrimSpace(t), SourceKeychain, nil
+	} else if errors.Is(err, auth.ErrStoreUnavailable) {
+		// The keychain backend is unusable (headless session, missing helper,
+		// unsupported platform). Surface it so the CLI explains the real
+		// failure and the safe environment fallback instead of the generic
+		// missing-credential message. Env/file tokens were already tried above
+		// and take precedence.
+		return "", "", err
 	} else if !errors.Is(err, auth.ErrNotFound) {
 		// A broken credential store must not break env/file automation;
 		// treat it as "no keychain token" rather than failing.
@@ -324,6 +331,8 @@ func resolveToken(env map[string]string, file FileConfig, store auth.SecretStore
 		if legacyErr == nil {
 			if t, getErr := store.Get(legacyKey); getErr == nil {
 				return strings.TrimSpace(t), SourceKeychain, nil
+			} else if errors.Is(getErr, auth.ErrStoreUnavailable) {
+				return "", "", getErr
 			}
 		}
 	}
@@ -415,8 +424,10 @@ func LoadConfig(env map[string]string, gitCwd, configPath string, opts ...LoadOp
 
 // MigrateLegacyToken moves a plaintext api_token from the YAML config file into
 // the secret store and removes it from the file, preserving every other key.
-// It reports whether a migration happened. The migration is one-time: after a
-// successful write the file no longer contains api_token.
+// It reports whether a migration happened. The migration is one-time: the
+// plaintext token is only removed after the secure write succeeds, and a failed
+// config-file write rolls back the just-stored secret so no token is stranded
+// in two places.
 func MigrateLegacyToken(path string, store auth.SecretStore) (bool, error) {
 	fc, err := LoadFileConfig(path)
 	if err != nil {
@@ -430,11 +441,25 @@ func MigrateLegacyToken(path string, store auth.SecretStore) (bool, error) {
 	if email == "" {
 		return false, fmt.Errorf("cannot migrate api_token to the credential store: config file %s has no email", path)
 	}
+	if av, ok := store.(auth.AvailabilityStore); ok {
+		if err := av.Available(); err != nil {
+			return false, err
+		}
+	}
+	// Snapshot any secret already stored under email so a failed config write
+	// restores it rather than deleting a previously valid credential.
+	prevSecret, prevExisted, err := auth.SnapshotSecret(store, email)
+	if err != nil {
+		return false, fmt.Errorf("inspect previous credential: %w", err)
+	}
 	if err := store.Set(email, token); err != nil {
 		return false, fmt.Errorf("save token to credential store: %w", err)
 	}
 	fc.APIToken = ""
 	if err := WriteFileConfig(path, fc); err != nil {
+		if rbErr := auth.RestoreSecret(store, email, prevSecret, prevExisted); rbErr != nil {
+			return false, fmt.Errorf("remove plaintext token from %s: %w (additionally failed to restore the previous credential: %v)", path, err, rbErr)
+		}
 		return false, fmt.Errorf("remove plaintext token from %s: %w", path, err)
 	}
 	return true, nil

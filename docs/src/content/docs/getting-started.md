@@ -38,7 +38,8 @@ bitbucket-cli --version
 
 The recommended workflow is `auth login`, which prompts for an Atlassian
 account email for API tokens, validates the credential against Bitbucket, and
-stores the token in the OS credential store (macOS Keychain) instead of plaintext:
+stores the token in the OS credential store (macOS Keychain, or Linux Secret
+Service) instead of plaintext:
 
 ```sh
 bitbucket-cli auth login

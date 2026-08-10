@@ -27,7 +27,10 @@ func init() {
 		Short: "Manage bitbucket-cli authentication",
 		Long: "Manage bitbucket-cli credentials (gh-style auth workflow). " +
 			"Tokens are validated against Bitbucket before being saved to the OS " +
-			"credential store; non-secret profile data lives in the YAML config file.",
+			"credential store; non-secret profile data lives in the YAML config file. " +
+			"Credential stores are platform-specific (macOS Keychain / Linux Secret " +
+			"Service); headless or unsupported environments must use environment " +
+			"credentials instead. Tokens are never written to the YAML file.",
 	}
 
 	// auth login — prompt or --with-token, validate, save.
@@ -125,8 +128,18 @@ func init() {
 
 			// Store identity only for account credentials. Access/OAuth token
 			// profiles use a persisted, namespaced key and do not invent an
-			// account. Write the new secret before changing the profile file so a
-			// failed keychain write leaves the old profile usable.
+			// account. Before mutating anything, verify the credential store is
+			// usable so a headless/unsupported environment fails with a
+			// targeted message (never a raw exec failure) and never writes a
+			// half-created profile. Then write the new secret before changing
+			// the profile file so a failed keychain write leaves the old
+			// profile usable.
+			store := auth.CurrentStore()
+			if av, ok := store.(auth.AvailabilityStore); ok {
+				if err := av.Available(); err != nil {
+					return fail(err)
+				}
+			}
 			next := previous
 			if tt == auth.TokenAPI {
 				next.Email = email
@@ -143,20 +156,37 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			if err := auth.CurrentStore().Set(storeKey, token); err != nil {
+			// Snapshot any secret already stored under the same key (re-login to
+			// the same account/profile) so a failed profile write below can
+			// restore it instead of deleting a previously valid credential.
+			prevSecret, prevExisted, err := auth.SnapshotSecret(store, storeKey)
+			if err != nil {
+				return fail(fmt.Errorf("inspect previous credential: %w", err))
+			}
+			if err := store.Set(storeKey, token); err != nil {
 				return fail(err)
 			}
 			if err := config.WriteFileConfig(path, next); err != nil {
-				_ = auth.CurrentStore().Delete(storeKey)
+				if rbErr := auth.RestoreSecret(store, storeKey, prevSecret, prevExisted); rbErr != nil {
+					return fail(fmt.Errorf("%v (failed to restore the previous credential: %v)", err, rbErr))
+				}
 				return fail(err)
 			}
 			if oldStored && oldKey != storeKey {
-				if err := auth.CurrentStore().Delete(oldKey); err != nil {
-					// Roll back the profile and the newly written secret. The old
-					// credential remains the only active profile on failure.
-					_ = config.WriteFileConfig(path, previous)
-					_ = auth.CurrentStore().Delete(storeKey)
-					return fail(fmt.Errorf("remove previous credential: %w", err))
+				if err := store.Delete(oldKey); err != nil {
+					// Roll back both sides of the transaction. The target key may
+					// have contained a credential before this login, so restore its
+					// snapshot instead of unconditionally deleting it.
+					configRollbackErr := config.WriteFileConfig(path, previous)
+					secretRollbackErr := auth.RestoreSecret(store, storeKey, prevSecret, prevExisted)
+					message := fmt.Sprintf("remove previous credential: %v", err)
+					if configRollbackErr != nil {
+						message += fmt.Sprintf("; failed to restore previous profile: %v", configRollbackErr)
+					}
+					if secretRollbackErr != nil {
+						message += fmt.Sprintf("; failed to restore target credential: %v", secretRollbackErr)
+					}
+					return fail(fmt.Errorf("%s", message))
 				}
 			}
 

@@ -11,7 +11,7 @@ without the Pi runtime.
 | `main.go` | Entry point → `cmd.Execute()` |
 | `cmd/` | Cobra commands. One file per area: `pr.go` (read), `pr_comment.go` + `pr_write.go` + `pr_attach.go` (write), `branch.go`, `repo.go`, `status.go`, `config.go`, `auth.go`, `root.go`. `common.go` holds shared helpers. |
 | `bitbucket/client.go` | Thin REST 2.0 client: provider-based auth, JSON `Request`, multipart `UploadFiles`, `Paginate`, normalized `HTTPError`, 403 scope hints, token redaction. |
-| `auth/` | Credential abstraction: `Provider` (Basic/Bearer), `SecretStore` (OS keychain + memory for tests), token types. |
+| `auth/` | Credential abstraction: `Provider` (Basic/Bearer), `SecretStore` (platform backends: macOS Keychain via `security`, Linux Secret Service via `secret-tool`, `UnsupportedStore` fallback; `MemoryStore` for tests), `ErrStoreUnavailable` sentinel, `AvailabilityStore.Available()` preflight, token types. |
 | `config/config.go` | Config resolution: env → YAML file → git-remote auto-detect, keychain-backed token lookup, legacy plaintext migration. |
 | `output/` | `RenderJSON`/`RenderLines`/`WriteError` and `*Summary` text formatters. |
 | `docs/` | Astro/Starlight static documentation site. |
