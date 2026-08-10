@@ -3,15 +3,11 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -21,7 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thaodangspace/bitbucket-cli/bitbucket"
-	"github.com/thaodangspace/bitbucket-cli/config"
+	accesssvc "github.com/thaodangspace/bitbucket-cli/internal/access"
 	"github.com/thaodangspace/bitbucket-cli/output"
 	"gopkg.in/yaml.v3"
 )
@@ -103,27 +99,8 @@ func redactWebhookURL(value string) string {
 	return u.String()
 }
 
-func webhookTarget(repository, workspace string) (subject, base, label string, err error) {
-	repository = strings.TrimSpace(repository)
-	workspace = strings.TrimSpace(workspace)
-	if repository != "" && workspace != "" {
-		return "", "", "", fmt.Errorf("--repository cannot be combined with --workspace")
-	}
-	if repository != "" {
-		ref, e := parseRepositorySelector(repository)
-		if e != nil {
-			return "", "", "", e
-		}
-		base = fmt.Sprintf("/repositories/%s/%s", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.RepoSlug))
-		return "repository", base + "/hooks", ref.Workspace + "/" + ref.RepoSlug, nil
-	}
-	if workspace == "" {
-		return "", "", "", fmt.Errorf("one of --repository or --workspace is required")
-	}
-	if strings.ContainsAny(workspace, "/?#") {
-		return "", "", "", fmt.Errorf("invalid workspace selector %q", workspace)
-	}
-	return "workspace", "/workspaces/" + bitbucket.EncodePathSegment(workspace) + "/hooks", workspace, nil
+func accessService(client *bitbucket.Client) *accesssvc.Service {
+	return accesssvc.New(client)
 }
 
 func validateWebhookURL(value string, allowInsecureLocalhost, allowPrivate bool) error {
@@ -167,145 +144,46 @@ func privateWebhookHost(host string) bool {
 	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
 }
 
-func eventCatalog(ctx context.Context, client *bitbucket.Client, subject string, noCache bool) ([]string, error) {
-	cacheDir := os.Getenv("BITBUCKET_CACHE_DIR")
-	cachePath := ""
-	if !noCache && os.Getenv("BITBUCKET_DISABLE_CACHE") == "" && cacheDir != "" {
-		cachePath = cacheDir + "/webhook-events-" + subject + ".json"
-		if data, err := os.ReadFile(cachePath); err == nil {
-			var cached struct {
-				Fetched time.Time `json:"fetched"`
-				Events  []string  `json:"events"`
-			}
-			if json.Unmarshal(data, &cached) == nil && time.Since(cached.Fetched) < 10*time.Minute && len(cached.Events) > 0 {
-				return cached.Events, nil
-			}
-		}
-	}
-	var raw json.RawMessage
-	if err := client.Request(ctx, "/hook_events/"+bitbucket.EncodePathSegment(subject), bitbucket.RequestOptions{}, &raw); err != nil {
-		return nil, err
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return nil, fmt.Errorf("decode webhook event catalog: %w", err)
-	}
-	if envelope, ok := value.(map[string]any); ok {
-		if values, exists := envelope["values"]; exists {
-			value = values
-		}
-	}
-	var events []string
-	if list, ok := value.([]any); ok {
-		for _, item := range list {
-			switch item := item.(type) {
-			case string:
-				events = append(events, item)
-			case map[string]any:
-				for _, key := range []string{"event", "key", "name"} {
-					if event, ok := item[key].(string); ok && event != "" {
-						events = append(events, event)
-						break
-					}
-				}
-			}
-		}
-	}
-	if len(events) == 0 {
-		return nil, fmt.Errorf("webhook event catalog for %s was empty or had an unsupported shape", subject)
-	}
-	events = uniqueStrings(events)
-	if cachePath != "" {
-		data, _ := json.Marshal(struct {
-			Fetched time.Time `json:"fetched"`
-			Events  []string  `json:"events"`
-		}{time.Now().UTC(), events})
-		_ = os.MkdirAll(cacheDir, 0700)
-		_ = os.WriteFile(cachePath, data, 0600)
-	}
-	return events, nil
-}
+type webhookEventCache struct{ dir string }
 
-func validateWebhookEvents(ctx context.Context, client *bitbucket.Client, subject string, requested []string, allowUnknown, noCache bool) ([]string, error) {
-	requested = uniqueStrings(requested)
-	if len(requested) == 0 {
-		return nil, fmt.Errorf("at least one --event is required")
-	}
-	if allowUnknown {
-		return requested, nil
-	}
-	valid, err := eventCatalog(ctx, client, subject, noCache)
+func (c webhookEventCache) Get(subject string) ([]string, bool) {
+	data, err := os.ReadFile(c.dir + "/webhook-events-" + subject + ".json")
 	if err != nil {
-		return nil, err
+		return nil, false
 	}
-	known := map[string]bool{}
-	for _, event := range valid {
-		known[event] = true
+	var cached struct {
+		Fetched time.Time `json:"fetched"`
+		Events  []string  `json:"events"`
 	}
-	for _, event := range requested {
-		if !known[event] {
-			return nil, fmt.Errorf("unknown webhook event %q (did you mean %q?); use --allow-unknown-event to bypass validation", event, eventSuggestion(event, valid))
-		}
+	if json.Unmarshal(data, &cached) != nil || time.Since(cached.Fetched) >= 10*time.Minute || len(cached.Events) == 0 {
+		return nil, false
 	}
-	return requested, nil
+	return cached.Events, true
 }
 
+func (c webhookEventCache) Put(subject string, events []string) {
+	data, _ := json.Marshal(struct {
+		Fetched time.Time `json:"fetched"`
+		Events  []string  `json:"events"`
+	}{time.Now().UTC(), events})
+	_ = os.MkdirAll(c.dir, 0700)
+	_ = os.WriteFile(c.dir+"/webhook-events-"+subject+".json", data, 0600)
+}
+
+func webhookEventOptions(noCache bool) accesssvc.EventCatalogOptions {
+	if noCache || os.Getenv("BITBUCKET_DISABLE_CACHE") != "" {
+		return accesssvc.EventCatalogOptions{}
+	}
+	if dir := os.Getenv("BITBUCKET_CACHE_DIR"); dir != "" {
+		return accesssvc.EventCatalogOptions{Cache: webhookEventCache{dir: dir}}
+	}
+	return accesssvc.EventCatalogOptions{}
+}
+
+// uniqueStrings remains as a compatibility adapter for declarative-file
+// helpers; normalization is owned by the access service.
 func uniqueStrings(values []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" && !seen[value] {
-			seen[value] = true
-			out = append(out, value)
-		}
-	}
-	return out
-}
-
-func eventSuggestion(value string, valid []string) string {
-	best := ""
-	bestDistance := 999
-	for _, candidate := range valid {
-		d := levenshtein(strings.ToLower(value), strings.ToLower(candidate))
-		if d < bestDistance {
-			best, bestDistance = candidate, d
-		}
-	}
-	if bestDistance > 8 {
-		return "a valid catalog event"
-	}
-	return best
-}
-
-func levenshtein(a, b string) int {
-	row := make([]int, len(b)+1)
-	for i := range row {
-		row[i] = i
-	}
-	for i, ra := range a {
-		previous := row[0]
-		row[0] = i + 1
-		for j, rb := range b {
-			old := row[j+1]
-			cost := 0
-			if ra != rb {
-				cost = 1
-			}
-			row[j+1] = minAccessInt(row[j+1]+1, row[j]+1, previous+cost)
-			previous = old
-		}
-	}
-	return row[len(b)]
-}
-func minAccessInt(values ...int) int {
-	result := values[0]
-	for _, value := range values[1:] {
-		if value < result {
-			result = value
-		}
-	}
-	return result
+	return accesssvc.UniqueStrings(values)
 }
 
 func readWebhookSecret(useStdin, prompt bool, envName string) (string, bool, error) {
@@ -388,7 +266,7 @@ func init() {
 		}
 		// /hook_events is a public catalog and intentionally has no
 		// capability/scope preflight.
-		values, err := eventCatalog(ctx(cmd), client, subject, eventNoCache)
+		values, err := accessService(client).EventCatalog(ctx(cmd), subject, webhookEventOptions(eventNoCache))
 		if err != nil {
 			return fail(err)
 		}
@@ -412,11 +290,11 @@ func init() {
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
 		}
-		_, path, _, err := webhookTarget(firstNonEmptyCLI(listRepository, flagRepository), firstNonEmptyCLI(listWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(listRepository, flagRepository), firstNonEmptyCLI(listWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
-		values, err := client.Paginate(ctx(cmd), path+"?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), listLimit, bitbucket.DefaultMaxPages)
+		values, err := accessService(client).ListWebhooks(ctx(cmd), target, listLimit)
 		if err != nil {
 			return fail(err)
 		}
@@ -434,12 +312,12 @@ func init() {
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
 		}
-		_, path, _, err := webhookTarget(firstNonEmptyCLI(viewRepository, flagRepository), firstNonEmptyCLI(viewWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(viewRepository, flagRepository), firstNonEmptyCLI(viewWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
-		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), path+"/"+bitbucket.EncodePathSegment(args[0]), bitbucket.RequestOptions{}, &raw); err != nil {
+		raw, err := accessService(client).ViewWebhook(ctx(cmd), target, args[0])
+		if err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(sanitizeWebhookJSON(raw), output.WebhookFields, output.WebhookSummary)
@@ -460,14 +338,15 @@ func init() {
 		if err = requireCapability(cfg, "webhook.write"); err != nil {
 			return fail(err)
 		}
-		subject, path, _, err := webhookTarget(firstNonEmptyCLI(createRepository, flagRepository), firstNonEmptyCLI(createWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(createRepository, flagRepository), firstNonEmptyCLI(createWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
+		subject, path := target.Subject, target.Path
 		if err = validateWebhookURL(createURL, createAllowHTTP, createAllowPrivate); err != nil {
 			return fail(err)
 		}
-		events, err := validateWebhookEvents(ctx(cmd), client, subject, createEvents, createAllowUnknown, createNoCache)
+		events, err := accesssvc.ValidateWebhookEvents(ctx(cmd), accessService(client), subject, createEvents, createAllowUnknown, webhookEventOptions(createNoCache))
 		if err != nil {
 			return fail(err)
 		}
@@ -479,10 +358,13 @@ func init() {
 		// Bitbucket's hook default is active; send the explicit value so the
 		// declarative behavior is stable across API versions.
 		createActiveSet = true
-		body := webhookBody(createDescription, createURL, events, createActive, createActiveSet, secret, secretSet)
-		if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
+		result, err := accessService(client).CreateWebhook(ctx(cmd), accesssvc.WebhookTarget{Subject: subject, Path: path, Label: ""}, accesssvc.WebhookCreate{
+			Description: createDescription, URL: createURL, Events: events, Active: createActive, Secret: secret, SecretSet: secretSet,
+		})
+		if err != nil {
 			return fail(redactWebhookError(err, secret))
 		}
+		raw = result
 		return emitObjectFields(sanitizeWebhookJSON(raw), output.WebhookFields, output.WebhookSummary)
 	}}
 	addWebhookTargetFlags(createCmd, &createRepository, &createWorkspace)
@@ -499,51 +381,42 @@ func init() {
 		if err = requireCapability(cfg, "webhook.write"); err != nil {
 			return fail(err)
 		}
-		subject, path, _, err := webhookTarget(firstNonEmptyCLI(editRepository, flagRepository), firstNonEmptyCLI(editWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(editRepository, flagRepository), firstNonEmptyCLI(editWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
-		var current map[string]any
-		if err := client.Request(ctx(cmd), path+"/"+bitbucket.EncodePathSegment(args[0]), bitbucket.RequestOptions{}, &current); err != nil {
-			return fail(err)
-		}
-		body := map[string]any{}
-		for _, key := range []string{"description", "url", "events", "active"} {
-			if value, ok := current[key]; ok {
-				body[key] = value
-			}
-		}
+		var edit accesssvc.WebhookEdit
 		if cmd.Flags().Changed("url") {
 			if err := validateWebhookURL(editURL, editAllowHTTP, editAllowPrivate); err != nil {
 				return fail(err)
 			}
-			body["url"] = editURL
+			edit.URL = &editURL
 		}
 		if cmd.Flags().Changed("description") {
-			body["description"] = editDescription
+			edit.Description = &editDescription
 		}
 		if cmd.Flags().Changed("event") {
-			events, e := validateWebhookEvents(ctx(cmd), client, subject, editEvents, editAllowUnknown, editNoCache)
+			events, e := accesssvc.ValidateWebhookEvents(ctx(cmd), accessService(client), target.Subject, editEvents, editAllowUnknown, webhookEventOptions(editNoCache))
 			if e != nil {
 				return fail(e)
 			}
-			body["events"] = events
+			edit.Events = &events
 		}
 		if cmd.Flags().Changed("active") {
-			body["active"] = editActive
+			edit.Active = &editActive
 		}
 		secret, secretSet, err := readWebhookSecret(editSecretStdin, editSecretPrompt, editSecretEnv)
 		if err != nil {
 			return fail(err)
 		}
 		if secretSet {
-			body["secret"] = secret
+			edit.Secret = &secret
 		}
-		if len(body) == 0 || (!cmd.Flags().Changed("url") && !cmd.Flags().Changed("description") && !cmd.Flags().Changed("event") && !cmd.Flags().Changed("active") && !secretSet) {
+		if !cmd.Flags().Changed("url") && !cmd.Flags().Changed("description") && !cmd.Flags().Changed("event") && !cmd.Flags().Changed("active") && !secretSet {
 			return fail(fmt.Errorf("at least one webhook field must be supplied"))
 		}
-		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), path+"/"+bitbucket.EncodePathSegment(args[0]), bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
+		raw, err := accessService(client).EditWebhook(ctx(cmd), target, args[0], edit)
+		if err != nil {
 			return fail(redactWebhookError(err, secret))
 		}
 		return emitObjectFields(sanitizeWebhookJSON(raw), output.WebhookFields, output.WebhookSummary)
@@ -564,11 +437,12 @@ func init() {
 		if err = requireCapability(cfg, "webhook.delete"); err != nil {
 			return fail(err)
 		}
-		_, path, label, err := webhookTarget(firstNonEmptyCLI(deleteRepository, flagRepository), firstNonEmptyCLI(deleteWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(deleteRepository, flagRepository), firstNonEmptyCLI(deleteWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
-		if err := client.Request(ctx(cmd), path+"/"+bitbucket.EncodePathSegment(args[0]), bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
+		path, label := target.Path, target.Label
+		if err := accessService(client).DeleteWebhook(ctx(cmd), accesssvc.WebhookTarget{Path: path}, args[0]); err != nil {
 			return fail(err)
 		}
 		raw, _ := json.Marshal(map[string]any{"deleted": true, "uuid": args[0], "subject": label})
@@ -589,11 +463,12 @@ func init() {
 		if err = requireCapability(cfg, "webhook.read"); err != nil {
 			return fail(err)
 		}
-		subject, path, label, err := webhookTarget(firstNonEmptyCLI(exportRepository, flagRepository), firstNonEmptyCLI(exportWorkspace, flagWorkspace))
+		target, err := accesssvc.ResolveWebhookTarget(firstNonEmptyCLI(exportRepository, flagRepository), firstNonEmptyCLI(exportWorkspace, flagWorkspace))
 		if err != nil {
 			return fail(err)
 		}
-		values, err := client.PaginateAll(ctx(cmd), path, bitbucket.DefaultMaxPages)
+		subject, label := target.Subject, target.Label
+		values, err := accessService(client).ListAllWebhooks(ctx(cmd), target)
 		if err != nil {
 			return fail(err)
 		}
@@ -643,10 +518,11 @@ func init() {
 			}
 			workspace = doc.Workspace
 		}
-		subject, path, label, err := webhookTarget(repository, workspace)
+		target, err := accesssvc.ResolveWebhookTarget(repository, workspace)
 		if err != nil {
 			return fail(err)
 		}
+		subject, path, label := target.Subject, target.Path, target.Label
 		if doc.Subject != "" && doc.Subject != subject {
 			return fail(fmt.Errorf("file subject %q does not match target %q", doc.Subject, subject))
 		}
@@ -654,13 +530,13 @@ func init() {
 			if err := validateWebhookURL(doc.Hooks[i].URL, applyAllowHTTP, applyAllowPrivate); err != nil {
 				return fail(fmt.Errorf("hooks[%d]: %w", i, err))
 			}
-			events, e := validateWebhookEvents(ctx(cmd), client, subject, doc.Hooks[i].Events, applyAllowUnknown, applyNoCache)
+			events, e := accesssvc.ValidateWebhookEvents(ctx(cmd), accessService(client), subject, doc.Hooks[i].Events, applyAllowUnknown, webhookEventOptions(applyNoCache))
 			if e != nil {
 				return fail(fmt.Errorf("hooks[%d]: %w", i, e))
 			}
 			doc.Hooks[i].Events = events
 		}
-		existing, err := client.PaginateAll(ctx(cmd), path, bitbucket.DefaultMaxPages)
+		existing, err := accessService(client).ListAllWebhooks(ctx(cmd), target)
 		if err != nil {
 			return fail(err)
 		}
@@ -955,83 +831,25 @@ func hasDeleteOperation(ops []webhookOperation) bool {
 	return false
 }
 func executeWebhookApply(ctx context.Context, client *bitbucket.Client, path string, specs []webhookSpec, existing []json.RawMessage, operations []webhookOperation) map[string]any {
-	result := map[string]any{"operations": operations, "applied": []any{}, "errors": []any{}}
-	for _, op := range operations {
-		if op.Action == "no-op" {
-			continue
-		}
-		var spec *webhookSpec
-		for i := range specs {
-			if specs[i].UUID == op.UUID || (specs[i].UUID == "" && op.Action != "delete" && specs[i].Description == op.Description && normalizeHookURL(specs[i].URL) == normalizeHookURL(op.matchURL)) {
-				spec = &specs[i]
-				break
-			}
-		}
-		var err error
-		var raw json.RawMessage
-		switch op.Action {
-		case "create":
-			if spec != nil {
-				err = client.Request(ctx, path, bitbucket.RequestOptions{Method: http.MethodPost, Body: hookBody(*spec)}, &raw)
-			}
-		case "update":
-			if spec != nil {
-				err = client.Request(ctx, path+"/"+bitbucket.EncodePathSegment(op.UUID), bitbucket.RequestOptions{Method: http.MethodPut, Body: hookBody(*spec)}, &raw)
-			}
-		case "delete":
-			err = client.Request(ctx, path+"/"+bitbucket.EncodePathSegment(op.UUID), bitbucket.RequestOptions{Method: http.MethodDelete}, nil)
-		}
-		if err != nil {
-			result["errors"] = append(result["errors"].([]any), map[string]any{"operation": op, "error": err.Error()})
-			continue
-		}
-		result["applied"] = append(result["applied"].([]any), op)
+	serviceSpecs := make([]accesssvc.WebhookSpec, len(specs))
+	for i, spec := range specs {
+		serviceSpecs[i] = accesssvc.WebhookSpec{UUID: spec.UUID, Description: spec.Description, URL: spec.URL, Active: spec.Active, Events: spec.Events}
 	}
-	_ = existing
+	serviceOperations := make([]accesssvc.WebhookOperation, len(operations))
+	for i, operation := range operations {
+		serviceOperations[i] = accesssvc.WebhookOperation{Action: operation.Action, UUID: operation.UUID, Description: operation.Description, URL: operation.URL, MatchURL: operation.matchURL}
+	}
+	result := accessService(client).ApplyWebhooks(ctx, accesssvc.WebhookTarget{Path: path}, serviceSpecs, serviceOperations)
+	_ = existing // existing values are consumed by the command-layer plan.
 	return result
 }
 
-// SSH public-key helpers.
-type parsedPublicKey struct{ Material, Algorithm, Fingerprint string }
+// SSH public-key parsing is a service concern. Keep this adapter for
+// command-layer tests and presentation helpers.
+type parsedPublicKey = accesssvc.PublicKey
 
 func parsePublicKey(data []byte) (parsedPublicKey, error) {
-	text := strings.TrimSpace(string(data))
-	if strings.Contains(text, "PRIVATE KEY") || strings.Contains(text, "OPENSSH PRIVATE KEY") {
-		return parsedPublicKey{}, fmt.Errorf("private-key material is not accepted")
-	}
-	var line string
-	for _, candidate := range strings.Split(text, "\n") {
-		candidate = strings.TrimSpace(candidate)
-		if candidate != "" && !strings.HasPrefix(candidate, "#") {
-			line = candidate
-			break
-		}
-	}
-	fields := strings.Fields(line)
-	if len(fields) < 2 {
-		return parsedPublicKey{}, fmt.Errorf("expected an OpenSSH public key (algorithm base64 [comment])")
-	}
-	blob, err := base64.StdEncoding.DecodeString(fields[1])
-	if err != nil {
-		return parsedPublicKey{}, fmt.Errorf("invalid public-key base64: %w", err)
-	}
-	if len(blob) < 4 {
-		return parsedPublicKey{}, fmt.Errorf("invalid public-key blob")
-	}
-	n := int(binary.BigEndian.Uint32(blob[:4]))
-	if n <= 0 || n+4 > len(blob) {
-		return parsedPublicKey{}, fmt.Errorf("invalid public-key algorithm field")
-	}
-	algorithm := string(blob[4 : 4+n])
-	if algorithm != fields[0] {
-		return parsedPublicKey{}, fmt.Errorf("public-key algorithm %q does not match its blob", fields[0])
-	}
-	digest := sha256.Sum256(blob)
-	material := fields[0] + " " + fields[1]
-	if len(fields) > 2 {
-		material += " " + strings.Join(fields[2:], " ")
-	}
-	return parsedPublicKey{Material: material, Algorithm: algorithm, Fingerprint: "SHA256:" + base64.RawStdEncoding.EncodeToString(digest[:])}, nil
+	return accesssvc.ParsePublicKey(data)
 }
 func keyInput(path string) ([]byte, error) {
 	if path == "-" {
@@ -1110,19 +928,7 @@ func keyPath(user, id string) string {
 }
 
 func resolveSSHUser(ctx context.Context, client *bitbucket.Client, selector string) (string, error) {
-	selector = strings.TrimSpace(selector)
-	if selector != "" {
-		return keyUser(selector)
-	}
-	var account map[string]any
-	if err := client.Request(ctx, "/user", bitbucket.RequestOptions{}, &account); err != nil {
-		return "", fmt.Errorf("resolve authenticated user: %w", err)
-	}
-	resolved, err := accountSelector(account)
-	if err != nil {
-		return "", fmt.Errorf("resolve authenticated user: %w", err)
-	}
-	return resolved, nil
+	return accessService(client).ResolveSSHUser(ctx, selector)
 }
 
 func keyID(value string) (string, error) {
@@ -1143,24 +949,10 @@ func keyUser(value string) (string, error) {
 	return value, nil
 }
 func keyList(ctx context.Context, client *bitbucket.Client, user string, limit int) ([]json.RawMessage, error) {
-	return client.Paginate(ctx, keyPath(user, "")+"?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), limit, bitbucket.DefaultMaxPages)
+	return accessService(client).ListSSHKeys(ctx, user, limit)
 }
 func keyDuplicate(values []json.RawMessage, fingerprint string) bool {
-	for _, raw := range values {
-		var m map[string]any
-		if json.Unmarshal(raw, &m) != nil {
-			continue
-		}
-		if value, ok := m["fingerprint"].(string); ok && value == fingerprint {
-			return true
-		}
-		if key, ok := m["key"].(string); ok {
-			if parsed, err := parsePublicKey([]byte(key)); err == nil && parsed.Fingerprint == fingerprint {
-				return true
-			}
-		}
-	}
-	return false
+	return accesssvc.KeyDuplicate(values, fingerprint)
 }
 
 func init() {
@@ -1175,11 +967,12 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.read"); err != nil {
 			return fail(err)
 		}
-		user, err := resolveSSHUser(ctx(cmd), client, sshUser)
+		service := accessService(client)
+		user, err := service.ResolveSSHUser(ctx(cmd), sshUser)
 		if err != nil {
 			return fail(err)
 		}
-		values, err := keyList(ctx(cmd), client, user, sshLimit)
+		values, err := service.ListSSHKeys(ctx(cmd), user, sshLimit)
 		if err != nil {
 			return fail(err)
 		}
@@ -1200,12 +993,13 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.read"); err != nil {
 			return fail(err)
 		}
-		user, err := resolveSSHUser(ctx(cmd), client, sshViewUser)
+		service := accessService(client)
+		user, err := service.ResolveSSHUser(ctx(cmd), sshViewUser)
 		if err != nil {
 			return fail(err)
 		}
-		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{}, &raw); err != nil {
+		raw, err := service.ViewSSHKey(ctx(cmd), user, id)
+		if err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(decorateKey(raw), output.SSHKeyFields, output.SSHKeySummary)
@@ -1235,24 +1029,13 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.write"); err != nil {
 			return fail(err)
 		}
-		user, err := resolveSSHUser(ctx(cmd), client, "")
+		service := accessService(client)
+		user, err := service.ResolveSSHUser(ctx(cmd), "")
 		if err != nil {
 			return fail(err)
 		}
-		values, err := keyList(ctx(cmd), client, user, 0)
+		raw, err := service.AddSSHKey(ctx(cmd), user, parsed, sshLabel, expires)
 		if err != nil {
-			return fail(err)
-		}
-		if keyDuplicate(values, parsed.Fingerprint) {
-			return fail(fmt.Errorf("SSH key already exists (fingerprint %s)", parsed.Fingerprint))
-		}
-		body := map[string]any{"key": parsed.Material, "label": sshLabel}
-		opts := bitbucket.RequestOptions{Method: http.MethodPost, Body: body}
-		if expires != "" {
-			opts.Query = url.Values{"expires_on": {expires}}
-		}
-		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), keyPath(user, ""), opts, &raw); err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(decorateKey(raw), output.SSHKeyFields, output.SSHKeySummary)
@@ -1280,16 +1063,13 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.write"); err != nil {
 			return fail(err)
 		}
-		user, err := resolveSSHUser(ctx(cmd), client, "")
+		service := accessService(client)
+		user, err := service.ResolveSSHUser(ctx(cmd), "")
 		if err != nil {
 			return fail(err)
 		}
-		body := map[string]any{}
-		if cmd.Flags().Changed("label") {
-			body["label"] = sshEditLabel
-		}
-		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{Method: http.MethodPut, Body: body}, &raw); err != nil {
+		raw, err := service.EditSSHKey(ctx(cmd), user, id, sshEditLabel)
+		if err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(decorateKey(raw), output.SSHKeyFields, output.SSHKeySummary)
@@ -1316,11 +1096,12 @@ func init() {
 		if err = requireCapability(cfg, "ssh-key.delete"); err != nil {
 			return fail(err)
 		}
-		user, err := resolveSSHUser(ctx(cmd), client, "")
+		service := accessService(client)
+		user, err := service.ResolveSSHUser(ctx(cmd), "")
 		if err != nil {
 			return fail(err)
 		}
-		if err := client.Request(ctx(cmd), keyPath(user, id), bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
+		if err := service.DeleteSSHKey(ctx(cmd), user, id); err != nil {
 			return fail(err)
 		}
 		raw, _ := json.Marshal(map[string]any{"deleted": true, "uuid": id})
@@ -1330,14 +1111,6 @@ func init() {
 	sshDelete.Flags().BoolVar(&sshDeleteYes, "yes", false, "Confirm deletion")
 	sshCmd.AddCommand(sshList, sshView, sshAdd, sshEdit, sshDelete)
 	rootCmd.AddCommand(sshCmd)
-}
-
-func deployBase(repository string) (string, config.ResolvedRepoRef, error) {
-	ref, err := parseRepositorySelector(repository)
-	if err != nil {
-		return "", config.ResolvedRepoRef{}, err
-	}
-	return fmt.Sprintf("/repositories/%s/%s/deploy-keys", bitbucket.EncodePathSegment(ref.Workspace), bitbucket.EncodePathSegment(ref.RepoSlug)), ref, nil
 }
 
 func init() {
@@ -1352,11 +1125,11 @@ func init() {
 		if err = requireCapability(cfg, "deploy-key.read"); err != nil {
 			return fail(err)
 		}
-		path, _, err := deployBase(firstNonEmptyCLI(listRepository, flagRepository))
+		path, err := accesssvc.ResolveDeployTarget(firstNonEmptyCLI(listRepository, flagRepository))
 		if err != nil {
 			return fail(err)
 		}
-		values, err := client.Paginate(ctx(cmd), path+"?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), deployLimit, bitbucket.DefaultMaxPages)
+		values, err := accessService(client).ListDeployKeys(ctx(cmd), path, deployLimit)
 		if err != nil {
 			return fail(err)
 		}
@@ -1381,20 +1154,12 @@ func init() {
 		if err = requireCapability(cfg, "deploy-key.write"); err != nil {
 			return fail(err)
 		}
-		path, _, err := deployBase(firstNonEmptyCLI(addRepository, flagRepository))
+		path, err := accesssvc.ResolveDeployTarget(firstNonEmptyCLI(addRepository, flagRepository))
 		if err != nil {
 			return fail(err)
 		}
-		values, err := client.Paginate(ctx(cmd), path+"?pagelen="+fmt.Sprint(bitbucket.DefaultPageLen), 0, bitbucket.DefaultMaxPages)
+		raw, err := accessService(client).AddDeployKey(ctx(cmd), path, parsed, deployLabel)
 		if err != nil {
-			return fail(err)
-		}
-		if keyDuplicate(values, parsed.Fingerprint) {
-			return fail(fmt.Errorf("deploy key already exists in this repository (fingerprint %s)", parsed.Fingerprint))
-		}
-		body := map[string]any{"key": parsed.Material, "label": deployLabel}
-		var raw json.RawMessage
-		if err := client.Request(ctx(cmd), path, bitbucket.RequestOptions{Method: http.MethodPost, Body: body}, &raw); err != nil {
 			return fail(err)
 		}
 		return emitObjectFields(decorateKey(raw), output.DeployKeyFields, output.DeployKeySummary)
@@ -1419,11 +1184,11 @@ func init() {
 		if err = requireCapability(cfg, "deploy-key.delete"); err != nil {
 			return fail(err)
 		}
-		path, _, err := deployBase(firstNonEmptyCLI(delRepository, flagRepository))
+		path, err := accesssvc.ResolveDeployTarget(firstNonEmptyCLI(delRepository, flagRepository))
 		if err != nil {
 			return fail(err)
 		}
-		if err := client.Request(ctx(cmd), path+"/"+fmt.Sprint(id), bitbucket.RequestOptions{Method: http.MethodDelete}, nil); err != nil {
+		if err := accessService(client).DeleteDeployKey(ctx(cmd), path, fmt.Sprint(id)); err != nil {
 			return fail(err)
 		}
 		raw, _ := json.Marshal(map[string]any{"deleted": true, "id": id})
